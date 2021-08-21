@@ -32,17 +32,11 @@
   <% if @user_unspent_credits_count.positive? %>
     <center>
       <p>
-        <a href="<%= new_classified_listing_path %>">Create a Listing</a>
+        <a href="<%= new_listing_path %>">Create a Listing</a>
       </p>
       <p>
         <a href="/listings/dashboard">Go to Listings Dashboard</a>
       </p>
-
-      <% if @organizations.present? %>
-        <p>
-          <a href="<%= partnerships_path %>">View Partnership Opportunities</a>
-        </p>
-      <% end %>
     </center>
   <% end %>
 </div>

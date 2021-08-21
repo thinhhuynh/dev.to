@@ -1,5 +1,7 @@
+/* eslint-env node */
+
 module.exports = {
-  extends: ['airbnb-base/legacy', 'prettier'],
+  extends: ['eslint:recommended', 'prettier'],
   parserOptions: {
     ecmaVersion: 2018,
   },
@@ -22,8 +24,8 @@ module.exports = {
     browserStoreCache: false,
     initializeBaseUserData: false,
     initializeReadingListIcons: false,
-    initializeAllFollowButts: false,
     initializeSponsorshipVisibility: false,
     ActiveXObject: false,
+    AndroidBridge: false,
   },
 };

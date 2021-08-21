@@ -1,15 +1,10 @@
+@import 'config/import';
+
 @import 'variables';
 @import 'mixins';
 
-body {
-  @include themeable(background, theme-background, $lightest-gray);
-  @include themeable(color, theme-color, $black);
-  font-family: $helvetica;
-  font-size: 18px;
-  padding: 0 !important;
-  margin: 0 !important;
-  margin-top: -20px !important;
-  overflow-y: scroll;
+#audiocontent {
+  display: none;
 }
 
 *:focus {
@@ -22,68 +17,11 @@ body {
   outline: none;
 }
 
-.ptr--ptr {
-  margin-top: 70px;
-  margin-bottom: -70px;
-}
-
 .modal-open {
   margin: 0;
   overflow: hidden;
   overflow-y: hidden;
   height: 90vh;
-}
-
-.zen-mode {
-  .top-bar,
-  .primary-sticky-nav,
-  .article-actions {
-    display: none !important;
-  }
-}
-
-@media print {
-   .top-bar, .article-actions {
-      display: none;
-   }
-}
-
-.config_minimize_newest_listings {
-  #sidebar-listings-widget {
-    .widget-body {
-      display: none !important;
-    }
-  }
-}
-
-.universal-page-content-wrapper {
-  overflow: hidden;
-  min-height: 88vh;
-  visibility: visible;
-  &.stories-index,
-  &.notifications-index,
-  &.stories-search,
-  &.podcast_episodes-index,
-  &.reading_list_items-index,
-  &.history-index,
-  .tags-index,
-  &.twitch_live_streams-show {
-    margin-top: 68px;
-  }
-}
-
-pre {
-  background-color: #2b2b32;
-  padding: 10px;
-  font-size: 15px;
-}
-
-a {
-  @include themeable(color, theme-anchor-color, $sky-blue);
-  text-decoration: none;
-  &:hover {
-    opacity: 0.9;
-  }
 }
 
 div {
@@ -97,103 +35,20 @@ div {
   display: none;
 }
 
-pre {
-  background: #29292e;
-  border-radius: 2px;
-  overflow-x: scroll;
-  font-size: 11px;
-  color: #eff0f9;
-  line-height: 1.42em;
-  font-size: 13px;
-  width: calc(100% - 25px);
-  @media screen and (min-width: 380px) {
-    font-size: 15px;
-  }
-  code {
-    background: #29292e;
-    color: #eff0f9;
-    white-space: pre;
-  }
-}
-
-.cta {
-  color: $black;
-  background: $green;
-  font-family: $helvetica-condensed;
-  -webkit-appearance: none;
-  font-stretch: condensed;
-  font-weight: bold;
-}
-
-button {
-  cursor: pointer;
-}
-
-input[type='submit'] {
-  cursor: pointer;
-}
-
-input[type='text'],
-textarea,
-input[type='url'],
-input[type='email'] {
-  outline: 0;
-}
-
-.snackbar {
-  position: fixed;
-  bottom: 20px;
-  left: 20px;
-  right: 20px;
-  @include themeable(
-    background,
-    theme-container-accent-background,
-    $light-purple
-  );
-  @include themeable(border, container-border, 2px solid $purple);
-  padding: 12px 30px;
-  z-index: 20;
-  border-radius: 3px;
-  font-weight: bold;
-  @media screen and (min-width: 430px) {
-    right: auto;
-    display: inline-block;
-    -webkit-animation: ease-out;
-    -webkit-animation-name: slide-in-from-left;
-    -webkit-animation-duration: 0.25s;
-  }
-}
-
-@-webkit-keyframes slide-in-from-left {
-  0% {
-    left: -300px;
-  }
-  50% {
-    left: 0px;
-  }
-  90% {
-    left: 24px;
-  }
-  100% {
-    left: 20px;
-  }
-}
-
 .partner-image-dark-mode {
   display: none !important;
 }
 
-body.night-theme, body.ten-x-hacker-theme {
+body.night-theme,
+body.ten-x-hacker-theme {
   .on-page-nav-butt img,
   .icon-img,
-  .dropdown-icon,
   .reaction-button:not(.reacted) img,
   .image-upload-button button,
   .icon-image,
   .dev-badge,
   .chatchannels__config img,
-  .external-link-img,
-  .group-img {
+  .message__actions img {
     -webkit-filter: invert(95%);
     filter: invert(95%);
   }
@@ -209,76 +64,55 @@ body.night-theme, body.ten-x-hacker-theme {
   }
 }
 
-// Alternate base fonts
+.broadcast-wrapper {
+  box-sizing: border-box;
+  display: none;
+  padding: var(--su-2) var(--su-4);
+  position: fixed;
+  text-align: center;
+  width: 100%;
+  z-index: var(--z-sticky);
 
-body.sans-serif-article-body {
-  .body {
-    font-family: $helvetica;
-  }
-  .body p {
-    font-family: $helvetica;
-    font-size: 0.98em;
-  }
-}
-body.comic-sans-article-body {
-  .body {
-    font-family: 'Comic Sans MS', cursive, sans-serif;
-  }
-  .body p {
-    font-family: 'Comic Sans MS', cursive, sans-serif;
-    font-size: 0.98em;
-  }
-}
-body.monospace-article-body {
-  .body {
-    font-family: $monospace;
-  }
-  .body p {
-    font-family: $monospace;
-    font-size: 0.9em;
+  .static-header & {
+    position: relative;
   }
 }
 
-body.static-navbar-config {
-  .top-bar {
-    position: relative !important;
-    margin-top: 20px !important;
-    margin-bottom: -66px !important;
-  }
+.broadcast-visible {
+  display: flex;
 }
 
-.pro-visible-block,
+.broadcast-data {
+  flex-grow: 1;
+  align-self: center;
+}
+
 .trusted-visible-block {
   display: none !important;
 }
 
-body.pro-status-true .pro-visible-block,
 body.trusted-status-true .trusted-visible-block {
-  display: block !important;
+  display: flex !important;
 }
 
-.delete-confirm.container {
-  padding: 150px 10px;
-  min-height: 300px;
+.app-shell-loader {
+  position: absolute;
+  top: 200px;
   text-align: center;
-  h4 {
-    background: $black;
-    padding: 5px 8px;
-    color: white;
-    display: inline-block;
-    margin-bottom: 0px;
+  left: 0;
+  right: 0;
+  opacity: var(--opacity-0);
+  animation: loading-fadein 1.5s;
+  animation-delay: 0.6s;
+  font-size: 1.2em;
+  z-index: var(--z-negative);
+}
+
+@keyframes loading-fadein {
+  from {
+    opacity: var(--opacity-0);
   }
-  h2 {
-    font-size: 22px;
-    margin-bottom: 40px;
-  }
-  a.delete-link {
-    background: $red;
-    color: white;
-    padding: 10px 15px;
-    &:hover {
-      color: white;
-      opacity: 0.9;
-    }
+  to {
+    opacity: 0.6;
   }
 }

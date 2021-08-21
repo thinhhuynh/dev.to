@@ -1,12 +1,12 @@
 class ReplitTag < LiquidTagBase
   PARTIAL = "liquids/replit".freeze
-  def initialize(tag_name, id, tokens)
+  def initialize(_tag_name, id, _parse_context)
     super
     @id = parse_id(id)
   end
 
   def render(_context)
-    ActionController::Base.new.render_to_string(
+    ApplicationController.render(
       partial: PARTIAL,
       locals: {
         id: @id
@@ -18,13 +18,13 @@ class ReplitTag < LiquidTagBase
 
   def parse_id(input)
     input_no_space = input.delete(" ")
-    raise StandardError, "Invalid repl.it Id" unless valid_id?(input_no_space)
+    raise StandardError, "Invalid replit Id" unless valid_id?(input_no_space)
 
     input_no_space
   end
 
   def valid_id?(id)
-    id =~ /\A\@[\w]{2,15}\/[a-zA-Z0-9\-]{0,60}\Z/
+    id =~ %r{\A@\w{2,15}/[a-zA-Z0-9\-]{0,60}\Z}
   end
 end
 

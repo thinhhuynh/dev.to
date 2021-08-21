@@ -1,14 +1,12 @@
 <% title "Edit #{@tag.name}" %>
 
-<%= javascript_pack_tag "colorPicker", defer: true %>
-
 <style>
   .widget header {
-    color: <%= HexComparer.new([@tag.bg_color_hex || "#0000000", @tag.text_color_hex || "#ffffff"]).brightness(0.8) %>
+    color: <%= Color::CompareHex.new([@tag.bg_color_hex || "#0000000", @tag.text_color_hex || "#ffffff"]).brightness(0.8) %>
   }
 
   .slanty-accent {
-    background-color: <%= HexComparer.new([@tag.bg_color_hex || "#ffffff"]).accent %>
+    background-color: <%= Color::CompareHex.new([@tag.bg_color_hex || "#ffffff"]).accent %>
   }
 
   .tag-edit-tag {
@@ -23,7 +21,7 @@
   <div class="slanty-accent"></div>
   <div class="tag-or-query-header-container tag-edit-tag">
     <h1> Editing:
-      <a href="/t/<%= @tag.name %>" style="color: <%= @tag.text_color_hex %>;text-decoration: underline;"><%= @tag.name %></a>
+      <a href="<%= URL.tag @tag %>" style="color: <%= @tag.text_color_hex %>;text-decoration: underline;"><%= @tag.name %></a>
     </h1>
     <p>
       <code style="background-color: #D2D2D2; color: black; padding: 5px; border-radius: 5px;">#<%= @tag.name %></code> is the name of the tag used in Markdown.
@@ -44,7 +42,7 @@
       </ul>
     <% end %>
     <h4>
-      <a target="_blank" href="https://thepracticaldev.s3.amazonaws.com/i/cc8vz48djnhty6c31jog.png">
+      <a target="_blank" rel="noopener" href="https://thepracticaldev.s3.amazonaws.com/i/cc8vz48djnhty6c31jog.png">
         Click here to see an example of attributes.
       </a>
     </h4>
@@ -56,14 +54,12 @@
     <div class="tag-form-field">
       <%= label_tag :bg_color_hex %>
       <br>
-      <%= text_field_tag "tag[bg_color_hex]", @tag.bg_color_hex, placeholder: "Click for color picker", class: "tag-form-text-field color-picker" %>
-      <div class="color-palette"></div>
+      <%= color_field_tag "tag[bg_color_hex]", @tag.bg_color_hex.presence || "#000000", placeholder: "#000000", class: "tag-form-text-field" %>
     </div>
     <div class="tag-form-field">
       <%= label_tag :text_color_hex %>
       <br>
-      <%= text_field_tag "tag[text_color_hex]", @tag.text_color_hex, placeholder: "Click for color picker", class: "tag-form-text-field color-picker" %>
-      <div class="color-palette"></div>
+      <%= color_field_tag "tag[text_color_hex]", @tag.text_color_hex.presence || "#ffffff", placeholder: "#ffffff", class: "tag-form-text-field" %>
     </div>
     <div class="tag-form-field">
       <%= label_tag :short_summary %>
@@ -88,7 +84,7 @@
 
 <% if current_user.has_role?(:super_admin) || current_user.has_role?(:admin) %>
   <center>
-    <h1><a href="/internal/tags/<%= @tag.id %>" data-no-instant><%= @tag.name %> admin</a></h1>
+    <h1><a href="<%= edit_admin_tag_path(@tag.id) %>" data-no-instant><%= @tag.name %>'s admin page</a></h1>
     <br />
     <br />
     <br />

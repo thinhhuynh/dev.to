@@ -7,7 +7,6 @@ module Api
       rescue_from UnauthorizedError, with: :error_unauthorized
 
       before_action :authenticate_with_api_key_or_current_user!
-      before_action :authorize_pro_user
       before_action :authorize_user_organization
       before_action :load_owner
       before_action :validate_date_params, only: [:historical]
@@ -46,10 +45,6 @@ module Api
 
       private
 
-      def authorize_pro_user
-        raise UnauthorizedError unless @user&.pro?
-      end
-
       def authorize_user_organization
         return unless analytics_params[:organization_id]
 
@@ -63,7 +58,9 @@ module Api
 
       def validate_date_params
         raise ArgumentError, "Required 'start' parameter is missing" if analytics_params[:start].blank?
-        raise ArgumentError, "Date parameters 'start' or 'end' must be in the format of 'yyyy-mm-dd'" unless valid_date_params?
+
+        message = "Date parameters 'start' or 'end' must be in the format of 'yyyy-mm-dd'"
+        raise ArgumentError, message unless valid_date_params?
       end
 
       def analytics_params

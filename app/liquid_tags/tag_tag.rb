@@ -3,14 +3,15 @@ class TagTag < LiquidTagBase
   include ActionView::Helpers::TagHelper
   PARTIAL = "tags/liquid".freeze
 
-  def initialize(_tag_name, tag, _tokens)
+  def initialize(_tag_name, tag, _parse_context)
+    super
     @tag = parse_tag_name_to_tag(tag.delete(" "))
     @follow_btn = follow_button(@tag)
     @dark_color = dark_color(@tag)
   end
 
   def render(_context)
-    ActionController::Base.new.render_to_string(
+    ApplicationController.render(
       partial: PARTIAL,
       locals: {
         tag: @tag,
@@ -23,7 +24,7 @@ class TagTag < LiquidTagBase
   private
 
   def dark_color(tag)
-    HexComparer.new([tag.bg_color_hex || "#0000000", tag.text_color_hex || "#ffffff"]).brightness(0.88)
+    Color::CompareHex.new([tag.bg_color_hex || "#0000000", tag.text_color_hex || "#ffffff"]).brightness(0.88)
   end
 
   def parse_tag_name_to_tag(input)

@@ -3,11 +3,12 @@ module Webhook
     belongs_to :user, inverse_of: :webhook_endpoints
     belongs_to :oauth_application, optional: true,
                                    class_name: "Doorkeeper::Application",
-                                   foreign_key: :oauth_application_id,
                                    inverse_of: :webhook_endpoints
 
+    validates :events, presence: true
+    validates :source, presence: true
     validates :target_url, presence: true, uniqueness: true, url: { schemes: %w[https] }
-    validates :source, :events, presence: true
+    validates :user_id, presence: true
 
     attribute :events, :string, array: true, default: []
 

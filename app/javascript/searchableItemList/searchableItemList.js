@@ -1,51 +1,34 @@
 // Shared behavior between the reading list and history pages
-import setupAlgoliaIndex from '../src/utils/algolia';
-
-// Provides the initial state for the component
-export function defaultState(options) {
-  const state = {
-    query: '',
-    index: null,
-
-    page: 0,
-    hitsPerPage: 80,
-    totalCount: 0,
-
-    items: [],
-    itemsLoaded: false,
-
-    availableTags: [],
-    selectedTags: [],
-
-    showLoadMoreButton: false,
-  };
-  return Object.assign({}, state, options);
-}
+import { fetchSearch } from '../utilities/search';
 
 // Starts the search when the user types in the search box
 export function onSearchBoxType(event) {
   const component = this;
 
   const query = event.target.value;
-  const { selectedTags, statusView } = component.state;
+  const { selectedTag, statusView } = component.state;
 
-  component.setState({ page: 0, items: [] });
-  component.search(query, { tags: selectedTags, statusView });
+  component.setState({ page: 0 });
+  component.search(query, {
+    tags: selectedTag ? [selectedTag] : [],
+    statusView,
+    appendItems: false,
+  });
 }
 
-export function toggleTag(event, tag) {
+export function selectTag(event) {
   event.preventDefault();
-
+  const { value, dataset } = event.target;
+  const selectedTag = value ?? dataset.tag;
   const component = this;
-  const { query, selectedTags, statusView } = component.state;
-  const newTags = selectedTags;
-  if (newTags.indexOf(tag) === -1) {
-    newTags.push(tag);
-  } else {
-    newTags.splice(newTags.indexOf(tag), 1);
-  }
-  component.setState({ selectedTags: newTags, page: 0, items: [] });
-  component.search(query, { tags: newTags, statusView });
+  const { query, statusView } = component.state;
+
+  component.setState({ selectedTag, page: 0, items: [] });
+  component.search(query, {
+    tags: selectedTag ? [selectedTag] : [],
+    statusView,
+    appendItems: false,
+  });
 }
 
 export function clearSelectedTags(event) {
@@ -53,64 +36,88 @@ export function clearSelectedTags(event) {
 
   const component = this;
   const { query, statusView } = component.state;
-  const newTags = [];
-  component.setState({ selectedTags: newTags, page: 0, items: [] });
-  component.search(query, { tags: newTags, statusView });
+  component.setState({ selectedTag: '', page: 0, items: [] });
+  component.search(query, { tags: [], statusView, appendItems: false });
 }
 
 // Perform the initial search
-export function performInitialSearch({
-  containerId,
-  indexName,
-  searchOptions = {},
-}) {
+export function performInitialSearch({ searchOptions = {} }) {
   const component = this;
   const { hitsPerPage } = component.state;
+  const dataHash = { page: 0, per_page: hitsPerPage };
 
-  const index = setupAlgoliaIndex({ containerId, indexName });
+  component.setState({ loading: true });
 
-  index.search('', searchOptions).then(result => {
+  if (searchOptions.status) {
+    dataHash.status = searchOptions.status.split(',');
+  }
+
+  const responsePromise = fetchSearch('reactions', dataHash);
+  return responsePromise.then((response) => {
+    const reactions = response.result;
+    // FIXME: [@rhymes] the list of tags in the left column of the reading list
+    // is populated with only the tags belonging to items in the first page
+    const availableTags = [
+      ...new Set(reactions.flatMap((rxn) => rxn.reactable.tag_list)),
+    ].sort();
     component.setState({
-      items: result.hits,
-      totalCount: result.nbHits,
-      index, // set the index in the component state, to be retrieved later
+      page: 0,
+      items: reactions,
       itemsLoaded: true,
-      // show the button if the number of total results is greater
-      // than the number of results for the current page
-      showLoadMoreButton: result.nbHits > hitsPerPage,
+      itemsTotal: response.total,
+      showLoadMoreButton: hitsPerPage < response.total,
+      availableTags,
+      loading: false,
     });
   });
 }
 
 // Main search function
-export function search(query, { page, tags, statusView }) {
+export function search(query, { page, tags, statusView, appendItems = false }) {
   const component = this;
+
+  component.setState({ loading: true });
 
   // allow the page number to come from the calling function
   // we check `undefined` because page can be 0
   const newPage = page === undefined ? component.state.page : page;
 
-  const { index, hitsPerPage, items } = component.state;
+  const { hitsPerPage, items: existingItems } = component.state;
 
-  const filters = { hitsPerPage, page: newPage };
+  const dataHash = {
+    search_fields: query,
+    page: newPage,
+    per_page: hitsPerPage,
+  };
+
   if (tags && tags.length > 0) {
-    filters.tagFilters = tags;
+    dataHash.tag_names = tags;
+    dataHash.tag_boolean_mode = 'all';
   }
 
   if (statusView) {
-    filters.filters = `status:${statusView}`;
+    dataHash.status = statusView.split(',');
   }
-  index.search(query, filters).then(result => {
-    // append new items at the end
-    const allItems = [...items, ...result.hits];
+
+  const responsePromise = fetchSearch('reactions', dataHash);
+  return responsePromise.then((response) => {
+    const reactions = response.result;
+
+    let items;
+    if (appendItems) {
+      // we append the new reactions at the bottom of the list, for pagination
+      items = [...existingItems, ...reactions];
+    } else {
+      items = reactions;
+    }
+
     component.setState({
       query,
       page: newPage,
-      items: allItems,
-      totalCount: result.nbHits,
-      // show the button if the number of items is lower than the number
-      // of available results
-      showLoadMoreButton: allItems.length < result.nbHits,
+      items,
+      itemsTotal: response.total,
+      showLoadMoreButton: items.length < response.total,
+      loading: false,
     });
   });
 }
@@ -119,7 +126,12 @@ export function search(query, { page, tags, statusView }) {
 export function loadNextPage() {
   const component = this;
 
-  const { query, selectedTags, page, statusView } = component.state;
+  const { query, selectedTag, page, statusView } = component.state;
   component.setState({ page: page + 1 });
-  component.search(query, { tags: selectedTags, statusView });
+  component.search(query, {
+    page: page + 1,
+    tags: selectedTag ? [selectedTag] : [],
+    statusView,
+    appendItems: true,
+  });
 }

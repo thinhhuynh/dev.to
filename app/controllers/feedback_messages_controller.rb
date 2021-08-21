@@ -1,69 +1,68 @@
 class FeedbackMessagesController < ApplicationController
   # No authorization required for entirely public controller
   skip_before_action :verify_authenticity_token
+  FLASH_MESSAGE = "Make sure the forms are filled. 🤖 Other possible errors: "\
+                  "%<errors>s".freeze
 
   def create
     flash.clear
-    @feedback_message = FeedbackMessage.new(
-      feedback_message_params.merge(reporter_id: current_user&.id),
-    )
-    if recaptcha_verified? && @feedback_message.save
-      send_slack_message
-      redirect_to "/feedback_messages"
+    rate_limit!(:feedback_message_creation)
+
+    params = feedback_message_params.merge(reporter_id: current_user&.id)
+    @feedback_message = FeedbackMessage.new(params)
+
+    recaptcha_enabled = ReCaptcha::CheckEnabled.call(current_user)
+    if (!recaptcha_enabled || recaptcha_verified? || connect_feedback?) && @feedback_message.save
+      Slack::Messengers::Feedback.call(
+        user: current_user,
+        type: feedback_message_params[:feedback_type],
+        category: feedback_message_params[:category],
+        reported_url: feedback_message_params[:reported_url],
+        message: feedback_message_params[:message],
+      )
+      rate_limiter.track_limit_by_action(:feedback_message_creation)
+
+      if user_signed_in?
+        Rails.cache.fetch("user-#{current_user.id}-feedback-response-sent-at", expires_in: 24.hours) do
+          NotifyMailer.with(email_to: current_user.email).feedback_response_email.deliver_later
+          Time.current
+        end
+      end
+
+      respond_to do |format|
+        format.html { redirect_to feedback_messages_path }
+        format.json { render json: { success: true, message: "Your report is submitted" } }
+      end
     else
-      flash[:notice] = "Make sure the forms are filled 🤖 "
       @previous_message = feedback_message_params[:message]
-      render "pages/report-abuse.html.erb"
+      flash[:notice] = format(FLASH_MESSAGE, errors: @feedback_message.errors_as_sentence.presence || "N/A")
+
+      respond_to do |format|
+        format.html { render "pages/report_abuse" }
+        format.json do
+          render json: {
+            success: false,
+            message: @feedback_message.errors_as_sentence,
+            status: :bad_request
+          }
+        end
+      end
     end
   end
 
   private
 
   def recaptcha_verified?
-    params["g-recaptcha-response"] &&
-      verify_recaptcha(secret_key: ApplicationConfig["RECAPTCHA_SECRET"])
+    recaptcha_params = { secret_key: Settings::Authentication.recaptcha_secret_key }
+    params["g-recaptcha-response"] && verify_recaptcha(recaptcha_params)
   end
 
-  def send_slack_message
-    SlackBot.ping(
-      generate_message,
-      channel: feedback_message_params[:feedback_type],
-      username: "#{feedback_message_params[:feedback_type]}_bot",
-      icon_emoji: ":#{emoji_for_feedback(feedback_message_params[:feedback_type])}:",
-    )
-  end
-
-  def generate_message
-    <<~HEREDOC
-      #{generate_user_detail}
-      Category: #{feedback_message_params[:category]}
-      Internal Report: https://dev.to/internal/reports
-      *_ Reported URL: #{feedback_message_params[:reported_url]} _*
-      -----
-      *Message:* #{feedback_message_params[:message]}
-    HEREDOC
-  end
-
-  def generate_user_detail
-    return "*Anonymous report:*" unless current_user
-
-    <<~HEREDOC
-      *Logged in user:*
-      reporter: #{current_user.username} - https://dev.to/#{current_user.username}
-      email: <mailto:#{current_user.email}|#{current_user.email}>
-    HEREDOC
-  end
-
-  def emoji_for_feedback(feedback_type)
-    case feedback_type
-    when "abuse-reports"
-      "cry"
-    else
-      "robot_face"
-    end
+  def connect_feedback?
+    feedback_message_params[:feedback_type] == "connect"
   end
 
   def feedback_message_params
-    params[:feedback_message].permit(:message, :feedback_type, :category, :reported_url)
+    allowed_params = %i[message feedback_type category reported_url offender_id]
+    params.require(:feedback_message).permit(allowed_params)
   end
 end

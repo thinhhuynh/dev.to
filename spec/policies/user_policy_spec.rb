@@ -3,7 +3,7 @@ require "rails_helper"
 RSpec.describe UserPolicy, type: :policy do
   subject { described_class.new(user, other_user) }
 
-  let(:other_user) { build_stubbed(:user) }
+  let(:other_user) { create(:user) }
 
   context "when user is not signed-in" do
     let(:user) { nil }
@@ -15,13 +15,13 @@ RSpec.describe UserPolicy, type: :policy do
     let(:user) { other_user }
 
     permitted_actions = %i[
-      edit update onboarding_update join_org dashboard_show remove_association destroy
+      edit update onboarding_update join_org dashboard_show remove_identity destroy
     ]
 
     it { is_expected.to permit_actions(permitted_actions) }
 
-    context "with banned status" do
-      before { user.add_role(:banned) }
+    context "with suspended status" do
+      before { user.add_role(:suspended) }
 
       it { is_expected.to forbid_actions(%i[join_org moderation_routes]) }
     end
@@ -37,5 +37,17 @@ RSpec.describe UserPolicy, type: :policy do
     let(:user) { build_stubbed(:user) }
 
     it { is_expected.to forbid_actions(%i[moderation_routes]) }
+  end
+
+  context "when the user is an admin" do
+    let(:user) { build(:user, :admin) }
+
+    it { is_expected.to permit_actions(%i[moderation_routes]) }
+  end
+
+  context "when the user is a super admin" do
+    let(:user) { build(:user, :super_admin) }
+
+    it { is_expected.to permit_actions(%i[moderation_routes]) }
   end
 end

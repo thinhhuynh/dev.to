@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe JSFiddleTag, type: :liquid_template do
+RSpec.describe JsFiddleTag, type: :liquid_tag do
   describe "#link" do
     let(:jsfiddle_link) { "http://jsfiddle.net/link2twenty/v2kx9jcd" }
     let(:jsfiddle_link_with_custom_tabs) { "http://jsfiddle.net/link2twenty/v2kx9jcd result,html,css" }
@@ -12,14 +12,17 @@ RSpec.describe JSFiddleTag, type: :liquid_template do
     )
 
     def generate_new_liquid(link)
-      Liquid::Template.register_tag("jsfiddle", JSFiddleTag)
+      Liquid::Template.register_tag("jsfiddle", JsFiddleTag)
       Liquid::Template.parse("{% jsfiddle #{link} %}")
     end
 
     it "accepts jsfiddle link" do
       liquid = generate_new_liquid(jsfiddle_link)
-      rendered_jsfiddle_iframe = liquid.render
-      Approvals.verify(rendered_jsfiddle_iframe, name: "jsfiddle_liquid_tag", format: :html)
+
+      # rubocop:disable Style/StringLiterals
+      expect(liquid.render).to include('<iframe')
+        .and include('src="http://jsfiddle.net/link2twenty/v2kx9jcd/embedded//dark"')
+      # rubocop:enable Style/StringLiterals
     end
 
     it "accepts jsfiddle link with a / at the end" do

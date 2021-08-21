@@ -13,12 +13,12 @@ module Exporter
       @user = user
     end
 
-    def export(send_email: false, config: {})
+    def export(email, config: {})
       exports = {}
 
       # export content with filenames
       EXPORTERS.each do |exporter|
-        files = exporter.new(user).export(config.fetch(exporter.name.demodulize.downcase.to_sym, {}))
+        files = exporter.new(user).export(**config.fetch(exporter.name.demodulize.downcase.to_sym, {}))
         files.each do |name, content|
           exports[name] = content
         end
@@ -26,7 +26,7 @@ module Exporter
 
       zipped_exports = zip_exports(exports)
 
-      send_exports_by_email(zipped_exports) if send_email
+      send_exports_by_email(zipped_exports, email)
 
       update_user_export_fields
 
@@ -53,9 +53,9 @@ module Exporter
       buffer
     end
 
-    def send_exports_by_email(zipped_exports)
+    def send_exports_by_email(zipped_exports, email)
       zipped_exports.rewind
-      NotifyMailer.export_email(user, zipped_exports.read).deliver
+      NotifyMailer.with(email: email, attachment: zipped_exports.read).export_email.deliver_now
     end
 
     def update_user_export_fields

@@ -3,6 +3,7 @@
 <div class="credits-container">
   <div class="credits-banner">
     <h1>Purchase credits for @<%= @purchaser.username %></h1>
+
     <% if @organizations %>
         <% @organizations.each do |org| %>
           <% unless @purchaser.id == org.id %>
@@ -14,8 +15,17 @@
         <a href="/credits/purchase" data-no-instant>Switch to personal purchase</a>
       <% end %>
   </div>
+
+  <% if flash[:error].present? %>
+    <div class="crayons-card crayons-card--secondary crayons-notice crayons-notice--danger" role="alert">
+      <p><%= flash[:error] %></p>
+    </div>
+  <% end %>
+
   <script src="https://js.stripe.com/v3/"></script>
-  <p class="hook-description">Credits are used for <a href="/listings">DEV listings</a> as well as upcoming products and services.</p>
+
+  <p class="hook-description">Credits are used for <a href="/listings"><%= community_name %> listings</a> as well as upcoming products and services.</p>
+
   <div style="margin-top: 30px; text-align: center">
     <div class="credit-price" data-num="1">
       <div class="credit-amount" data-num="1">1+</div>
@@ -37,7 +47,7 @@
     </div>
       <br />
     </div>
-    <p class="bulk-description"><em>Contact <a href="mailto:biz@dev.to">biz@dev.to</a> to for custom bulk pricing and partnerships.</em></p>
+    <p class="bulk-description"><em>Contact <%= email_link(additional_info: { subject: "Custom Bulk Pricing/Partnerships" }) %> for custom bulk pricing and partnerships.</em></p>
     <details>
       <summary>
         How many credits does one listing cost?
@@ -133,8 +143,18 @@
   </div>
 </div>
   <script>
+    function changeSubmitButton(opts) {
+      var button = document.getElementById('add-credit-card-button');
+      button.disabled = !opts.active;
+      button.textContent = opts.text;
+    }
 
-    var stripe = Stripe('<%= ApplicationConfig["STRIPE_PUBLISHABLE_KEY"] %>');
+    var form = document.getElementById('new_credit');
+    form.onsubmit = function(_event) {
+      changeSubmitButton({ text: 'Submitting...', active: false })
+    }
+
+    var stripe = Stripe('<%= Settings::General.stripe_publishable_key %>');
     var elements = stripe.elements();
 
     <% if current_user.decorate.dark_theme? %>
@@ -196,6 +216,7 @@
           stripe.createToken(card).then(function(result) {
             if (result.error) {
               // Inform the user if there was an error.
+              changeSubmitButton({ text: "Complete Purchase", active: true });
               var errorElement = document.getElementById('card-errors');
               errorElement.textContent = result.error.message;
             } else {

@@ -1,5 +1,6 @@
 class CreditsController < ApplicationController
   before_action :authenticate_user!
+  before_action :initialize_stripe
 
   def index
     @user_unspent_credits_count = current_user.credits.unspent.size
@@ -22,83 +23,20 @@ class CreditsController < ApplicationController
   def create
     not_authorized if params[:organization_id].present? && !current_user.org_admin?(params[:organization_id])
 
-    @number_to_purchase = params[:credit][:number_to_purchase].to_i
+    number_to_purchase = params[:credit][:number_to_purchase].to_i
 
-    return unless make_payment
-
-    credit_objects = Array.new(@number_to_purchase) do
-      if params[:organization_id].present?
-        @purchaser = Organization.find(params[:organization_id])
-        Credit.new(organization_id: params[:organization_id], cost: cost_per_credit / 100.0)
-      else
-        @purchaser = current_user
-        Credit.new(user_id: current_user.id, cost: cost_per_credit / 100.0)
-      end
-    end
-    Credit.import credit_objects
-    @purchaser.credits_count = @purchaser.credits.size
-    @purchaser.spent_credits_count = @purchaser.credits.spent.size
-    @purchaser.unspent_credits_count = @purchaser.credits.unspent.size
-    @purchaser.save
-    redirect_to credits_path, notice: "#{@number_to_purchase} new credits purchased!"
-  end
-
-  private
-
-  def make_payment
-    find_or_create_customer
-    find_or_create_card
-    update_user_stripe_info
-    create_charge
-    true
-  rescue Payments::PaymentsError => e
-    flash[:error] = e.message
-    redirect_to purchase_credits_path
-    false
-  end
-
-  def find_or_create_customer
-    @customer = if current_user.stripe_id_code
-                  Payments::Customer.get(current_user.stripe_id_code)
-                else
-                  Payments::Customer.create(email: current_user.email)
-                end
-  end
-
-  def find_or_create_card
-    @card = if params[:stripe_token]
-              Payments::Customer.create_source(@customer.id, params[:stripe_token])
-            else
-              Payments::Customer.get_source(@customer, params[:selected_card])
-            end
-  end
-
-  def update_user_stripe_info
-    current_user.update_column(:stripe_id_code, @customer.id) if current_user.stripe_id_code.nil?
-  end
-
-  def create_charge
-    Payments::Customer.charge(
-      customer: @customer,
-      amount: generate_cost,
-      description: "Purchase of #{@number_to_purchase} credits.",
-      card_id: @card&.id,
+    payment = Payments::ProcessCreditPurchase.call(
+      current_user,
+      number_to_purchase,
+      purchase_options: params.slice(:stripe_token, :selected_card, :organization_id),
     )
-  end
 
-  def generate_cost
-    @number_to_purchase * cost_per_credit
-  end
-
-  def cost_per_credit
-    if @number_to_purchase < 10
-      500
-    elsif @number_to_purchase < 100
-      400
-    elsif @number_to_purchase < 1000
-      300
+    if payment.success?
+      @purchaser = payment.purchaser
+      redirect_to credits_path, notice: "#{number_to_purchase} new credits purchased!"
     else
-      250
+      flash[:error] = payment.error
+      redirect_to purchase_credits_path
     end
   end
 end

@@ -1,7 +1,7 @@
 require "rails_helper"
 
 RSpec.describe StripeActiveCardPolicy, type: :policy do
-  subject { described_class.new(user, :stripe_subscription) }
+  subject { described_class.new(user, :stripe_active_card) }
 
   context "when user is not signed in" do
     let(:user) { nil }
@@ -14,8 +14,8 @@ RSpec.describe StripeActiveCardPolicy, type: :policy do
 
     it { is_expected.to permit_actions(%i[create update destroy]) }
 
-    context "when user is banned" do
-      let(:user) { build(:user, :banned) }
+    context "when user is suspended" do
+      let(:user) { build(:user, :suspended) }
 
       it { is_expected.to forbid_actions(%i[create update]) }
     end

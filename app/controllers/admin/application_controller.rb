@@ -1,30 +1,36 @@
-# All Administrate controllers inherit from this `Admin::ApplicationController`,
-# making it the ideal place to put authentication logic or other
-# before_filters.
-#
-# If you want to add pagination or other controller-level concerns,
-# you're free to overwrite the RESTful controller actions.
 module Admin
-  class ApplicationController < Administrate::ApplicationController
-    include Pundit
+  class ApplicationController < ApplicationController
     before_action :authorize_admin
+    before_action :assign_help_url
+    after_action :verify_authorized
 
-    def order
-      @order ||= Administrate::Order.new(params[:order] || "id", params[:direction] || "desc")
+    HELP_URLS = {
+      badges: "https://admin.forem.com/docs/admin/badges",
+      badge_achievements: "https://admin.forem.com/docs/admin/badges",
+      configs: "https://admin.forem.com/docs/admin/config/README",
+      navigation_links: "https://admin.forem.com/docs/admin/navigation-links",
+      pages: "https://admin.forem.com/docs/admin/pages",
+      podcasts: "https://admin.forem.com/docs/admin/podcasts",
+      reports: "https://admin.forem.com/docs/admin/reports",
+      users: "https://admin.forem.com/docs/admin/users/README",
+      html_variants: "https://admin.forem.com/docs/admin/html-variants",
+      display_ads: "https://admin.forem.com/docs/admin/display-ads",
+      chat_channels: "https://admin.forem.com/docs/admin/chat-channels",
+      tags: "https://admin.forem.com/docs/admin/tags"
+    }.freeze
+
+    protected
+
+    def authorization_resource
+      self.class.name.sub("Admin::", "").sub("Controller", "").singularize.constantize
     end
-
-    def valid_request_origin?
-      # Temp monkey patch. Since we use https at the edge via fastly I think our protocol expectations
-      # are out of wack.
-      raise InvalidAuthenticityToken, NULL_ORIGIN_MESSAGE if request.origin == "null"
-
-      request.origin.nil? || request.origin.gsub("https", "http") == request.base_url.gsub("https", "http")
-    end
-
-    private
 
     def authorize_admin
-      authorize :admin, :show?
+      authorize(authorization_resource, :access?, policy_class: InternalPolicy)
+    end
+
+    def assign_help_url
+      @help_url = HELP_URLS[controller_name.to_sym]
     end
   end
 end

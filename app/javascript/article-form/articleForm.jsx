@@ -1,65 +1,59 @@
-import 'preact/devtools';
 import { h, Component } from 'preact';
 import PropTypes from 'prop-types';
 import linkState from 'linkstate';
 import postscribe from 'postscribe';
-// eslint-disable-next-line import/no-unresolved
-import ImageUploadIcon from 'images/image-upload.svg';
-// eslint-disable-next-line import/no-unresolved
-import ThreeDotsIcon from 'images/three-dots.svg';
+import { KeyboardShortcuts } from '../shared/components/useKeyboardShortcuts';
+import { embedGists } from '../utilities/gist';
 import { submitArticle, previewArticle } from './actions';
-import BodyMarkdown from './elements/bodyMarkdown';
-import BodyPreview from './elements/bodyPreview';
-import PublishToggle from './elements/publishToggle';
-import Notice from './elements/notice';
-import Title from './elements/title';
-import MainImage from './elements/mainImage';
-import ImageManagement from './elements/imageManagement';
-import MoreConfig from './elements/moreConfig';
-import Errors from './elements/errors';
-import KeyboardShortcutsHandler from './elements/keyboardShortcutsHandler';
-import Tags from '../shared/components/tags';
-import { OrganizationPicker } from '../organization/OrganizationPicker';
+import { EditorActions, Form, Header, Help, Preview } from './components';
+import { Button, Modal } from '@crayons';
+import {
+  noDefaultAltTextRule,
+  noEmptyAltTextRule,
+  noLevelOneHeadingsRule,
+  headingIncrement,
+} from '@utilities/markdown/markdownLintCustomRules';
 
-const SetupImageButton = ({
-  className,
-  imgSrc,
-  imgAltText,
-  onClickCallback,
-}) => (
-  <button type="button" className={className} onClick={onClickCallback}>
-    <img src={imgSrc} alt={imgAltText} />
-  </button>
-);
+/* global activateRunkitTags */
 
-SetupImageButton.propTypes = {
-  className: PropTypes.string.isRequired,
-  imgSrc: PropTypes.string.isRequired,
-  imgAltText: PropTypes.string.isRequired,
-  onClickCallback: PropTypes.func.isRequired,
+/*
+  Although the state fields: id, description, canonicalUrl, series, allSeries and
+  editing are not used in this file, they are important to the
+  editor.
+*/
+
+/**
+ * Settings for the markdownlint library we use to identify potential accessibility failings in posts
+ */
+const LINT_OPTIONS = {
+  customRules: [
+    noDefaultAltTextRule,
+    noLevelOneHeadingsRule,
+    headingIncrement,
+    noEmptyAltTextRule,
+  ],
+  config: {
+    default: false, // disable all default rules
+    [noDefaultAltTextRule.names[0]]: true,
+    [noLevelOneHeadingsRule.names[0]]: true,
+    [headingIncrement.names[0]]: true,
+    [noEmptyAltTextRule.names[0]]: true,
+  },
 };
 
-export default class ArticleForm extends Component {
-  static handleGistPreview() {
-    const els = document.getElementsByClassName('ltag_gist-liquid-tag');
-    for (let i = 0; i < els.length; i += 1) {
-      postscribe(els[i], els[i].firstElementChild.outerHTML);
-    }
+export class ArticleForm extends Component {
+  static handleRunkitPreview() {
+    activateRunkitTags();
   }
 
-  static handleRunkitPreview() {
-    const targets = document.getElementsByClassName('runkit-element');
-    for (let i = 0; i < targets.length; i += 1) {
-      if (targets[i].children.length > 0) {
-        const preamble = targets[i].children[0].textContent;
-        const content = targets[i].children[1].textContent;
-        targets[i].innerHTML = '';
-        window.RunKit.createNotebook({
-          element: targets[i],
-          source: content,
-          preamble,
-        });
-      }
+  // Scripts inserted via innerHTML won't execute, so we use this handler to
+  // make the Asciinema player work in previews.
+  static handleAsciinemaPreview() {
+    const els = document.getElementsByClassName('ltag_asciinema');
+    for (let i = 0; i < els.length; i += 1) {
+      const el = els[i];
+      const script = el.removeChild(el.firstElementChild);
+      postscribe(el, script.outerHTML);
     }
   }
 
@@ -67,6 +61,7 @@ export default class ArticleForm extends Component {
     version: PropTypes.string.isRequired,
     article: PropTypes.string.isRequired,
     organizations: PropTypes.string,
+    siteLogo: PropTypes.string.isRequired,
   };
 
   static defaultProps = {
@@ -75,78 +70,82 @@ export default class ArticleForm extends Component {
 
   constructor(props) {
     super(props);
-    const { article, version } = this.props;
+    const { article, version, siteLogo } = this.props;
     let { organizations } = this.props;
     this.article = JSON.parse(article);
     organizations = organizations ? JSON.parse(organizations) : null;
-
     this.url = window.location.href;
 
+    const previousContent =
+      JSON.parse(
+        localStorage.getItem(`editor-${version}-${window.location.href}`),
+      ) || {};
+    const isLocalstorageNewer =
+      new Date(previousContent.updatedAt) > new Date(this.article.updated_at);
+
+    const previousContentState =
+      previousContent && isLocalstorageNewer
+        ? {
+            title: previousContent.title || '',
+            tagList: previousContent.tagList || '',
+            mainImage: previousContent.mainImage || null,
+            bodyMarkdown: previousContent.bodyMarkdown || '',
+            edited: true,
+          }
+        : {};
+
     this.state = {
-      id: this.article.id || null,
+      formKey: new Date().toISOString(),
+      id: this.article.id || null, // eslint-disable-line react/no-unused-state
       title: this.article.title || '',
       tagList: this.article.cached_tag_list || '',
-      description: '',
-      canonicalUrl: this.article.canonical_url || '',
-      series: this.state.series || '',
-      allSeries: this.article.all_series || [],
+      description: '', // eslint-disable-line react/no-unused-state
+      canonicalUrl: this.article.canonical_url || '', // eslint-disable-line react/no-unused-state
+      series: this.article.series || '', // eslint-disable-line react/no-unused-state
+      allSeries: this.article.all_series || [], // eslint-disable-line react/no-unused-state
       bodyMarkdown: this.article.body_markdown || '',
       published: this.article.published || false,
       previewShowing: false,
-      helpShowing: false,
       previewResponse: '',
-      helpHTML: document.getElementById('editor-help-guide').innerHTML,
       submitting: false,
-      editing: this.article.id !== null,
-      imageManagementShowing: false,
-      moreConfigShowing: false,
+      editing: this.article.id !== null, // eslint-disable-line react/no-unused-state
       mainImage: this.article.main_image || null,
       organizations,
       organizationId: this.article.organization_id,
       errors: null,
       edited: false,
+      updatedAt: this.article.updated_at,
       version,
+      siteLogo,
+      helpFor: null,
+      helpPosition: null,
+      isModalOpen: false,
+      markdownLintErrors: [],
+      ...previousContentState,
     };
   }
 
   componentDidMount() {
-    const { version } = this.state;
-    const previousContent = JSON.parse(
-      localStorage.getItem(`editor-${version}-${window.location.href}`),
-    );
-    if (previousContent && this.checkContentChanges(previousContent)) {
-      this.setState({
-        title: previousContent.title || '',
-        tagList: previousContent.tagList || '',
-        mainImage: previousContent.mainImage || null,
-        bodyMarkdown: previousContent.bodyMarkdown || '',
-        edited: true,
-      });
-    }
-
     window.addEventListener('beforeunload', this.localStoreContent);
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('beforeunload', this.localStoreContent);
   }
 
   componentDidUpdate() {
     const { previewResponse } = this.state;
+
     if (previewResponse) {
-      this.constructor.handleGistPreview();
+      embedGists(this.formElement);
       this.constructor.handleRunkitPreview();
+      this.constructor.handleAsciinemaPreview();
     }
   }
 
-  checkContentChanges = previousContent => {
-    const { bodyMarkdown, title, mainImage, tagList } = this.state;
-    return (
-      bodyMarkdown !== previousContent.bodyMarkdown ||
-      title !== previousContent.title ||
-      mainImage !== previousContent.mainImage ||
-      tagList !== previousContent.tagList
-    );
-  };
-
   localStoreContent = () => {
     const { version, title, tagList, mainImage, bodyMarkdown } = this.state;
+    const updatedAt = new Date();
     localStorage.setItem(
       `editor-${version}-${this.url}`,
       JSON.stringify({
@@ -154,99 +153,104 @@ export default class ArticleForm extends Component {
         tagList,
         mainImage,
         bodyMarkdown,
+        updatedAt,
       }),
     );
   };
 
-  toggleHelp = e => {
-    const { helpShowing } = this.state;
-    e.preventDefault();
-    window.scrollTo(0, 0);
-    this.setState({
-      helpShowing: !helpShowing,
-      previewShowing: false,
-      imageManagementShowing: false,
-      moreConfigShowing: false,
-    });
+  setCommonProps = ({
+    previewShowing = false,
+    helpFor = null,
+    helpPosition = null,
+  }) => {
+    return {
+      previewShowing,
+      helpFor,
+      helpPosition,
+    };
   };
 
-  fetchPreview = e => {
+  fetchPreview = (e) => {
     const { previewShowing, bodyMarkdown } = this.state;
     e.preventDefault();
     if (previewShowing) {
       this.setState({
-        previewShowing: false,
-        helpShowing: false,
-        imageManagementShowing: false,
-        moreConfigShowing: false,
+        ...this.setCommonProps({}),
       });
     } else {
       previewArticle(bodyMarkdown, this.showPreview, this.failedPreview);
     }
   };
 
-  toggleImageManagement = e => {
-    const { imageManagementShowing } = this.state;
-    e.preventDefault();
-    window.scrollTo(0, 0);
-    this.setState({
-      imageManagementShowing: !imageManagementShowing,
-      previewShowing: false,
-      helpShowing: false,
-      moreConfigShowing: false,
-    });
+  lintMarkdown = () => {
+    const options = {
+      ...LINT_OPTIONS,
+      strings: {
+        content: this.state.bodyMarkdown,
+      },
+    };
+    const { content: markdownLintErrors } = window.markdownlint.sync(options);
+    this.setState({ markdownLintErrors });
   };
 
-  toggleMoreConfig = e => {
-    const { moreConfigShowing } = this.state;
-    e.preventDefault();
-    this.setState({
-      moreConfigShowing: !moreConfigShowing,
-      previewShowing: false,
-      helpShowing: false,
-      imageManagementShowing: false,
-    });
-  };
+  fetchMarkdownLint = async () => {
+    if (!window.markdownlint) {
+      const pathDataElement = document.getElementById('markdown-lint-js-path');
+      if (!pathDataElement) {
+        return;
+      }
 
-  showPreview = response => {
-    if (response.processed_html) {
-      this.setState({
-        previewShowing: true,
-        helpShowing: false,
-        imageManagementShowing: false,
-        previewResponse: response,
-        errors: null,
+      // Retrieve the correct fingerprinted URL for the scripts
+      const { markdownItJsPath, markdownLintJsPath } = pathDataElement.dataset;
+
+      const markdownItScript = document.createElement('script');
+      markdownItScript.setAttribute('src', markdownItJsPath);
+      document.body.appendChild(markdownItScript);
+
+      // The markdownlint script needs the first script to have finished loading first
+      markdownItScript.addEventListener('load', () => {
+        const markdownLintScript = document.createElement('script');
+        markdownLintScript.setAttribute('src', markdownLintJsPath);
+        document.body.appendChild(markdownLintScript);
+
+        markdownLintScript.addEventListener('load', this.lintMarkdown);
       });
     } else {
-      this.setState({
-        errors: response,
-        submitting: false,
-      });
+      this.lintMarkdown();
     }
   };
 
-  handleOrgIdChange = e => {
+  showPreview = (response) => {
+    this.fetchMarkdownLint();
+    this.setState({
+      ...this.setCommonProps({ previewShowing: true }),
+      previewResponse: response,
+      errors: null,
+    });
+  };
+
+  handleOrgIdChange = (e) => {
     const organizationId = e.target.selectedOptions[0].value;
     this.setState({ organizationId });
   };
 
-  failedPreview = response => {
-    // TODO: console.log should not be part of production code. Remove it!
-    // eslint-disable-next-line no-console
-    console.log(response);
+  failedPreview = (response) => {
+    this.setState({
+      errors: response,
+      submitting: false,
+    });
   };
 
-  handleConfigChange = e => {
+  handleConfigChange = (e) => {
     e.preventDefault();
     const newState = {};
     newState[e.target.name] = e.target.value;
     this.setState(newState);
   };
 
-  handleMainImageUrlChange = payload => {
+  handleMainImageUrlChange = (payload) => {
     this.setState({
       mainImage: payload.links[0],
-      imageManagementShowing: false,
     });
   };
 
@@ -256,61 +260,77 @@ export default class ArticleForm extends Component {
     window.removeEventListener('beforeunload', this.localStoreContent);
   };
 
-  onPublish = e => {
+  onPublish = (e) => {
     e.preventDefault();
-    this.setState({ submitting: true, published: true });
-    const { state } = this;
-    state.published = true;
-    submitArticle(state, this.removeLocalStorage, this.handleArticleError);
+    this.setState({ submitting: true });
+    const payload = {
+      ...this.state,
+      published: true,
+    };
+
+    submitArticle({
+      payload,
+      onSuccess: () => {
+        this.removeLocalStorage();
+        this.setState({ published: true, submitting: false });
+      },
+      onError: this.handleArticleError,
+    });
   };
 
-  onSaveDraft = e => {
+  onSaveDraft = (e) => {
     e.preventDefault();
-    this.setState({ submitting: true, published: false });
-    const { state } = this;
-    state.published = false;
-    submitArticle(state, this.removeLocalStorage, this.handleArticleError);
+    this.setState({ submitting: true });
+    const payload = {
+      ...this.state,
+      published: false,
+    };
+
+    submitArticle({
+      payload,
+      onSuccess: () => {
+        this.removeLocalStorage();
+        this.setState({ published: false, submitting: false });
+      },
+      onError: this.handleArticleError,
+    });
   };
 
-  handleTitleKeyDown = e => {
-    if (e.keyCode === 13) {
-      e.preventDefault();
-    }
-  };
-
-  handleBodyKeyDown = _e => {};
-
-  onClearChanges = e => {
+  onClearChanges = (e) => {
     e.preventDefault();
     // eslint-disable-next-line no-alert
     const revert = window.confirm(
       'Are you sure you want to revert to the previous save?',
     );
     if (!revert && navigator.userAgent !== 'DEV-Native-ios') return;
+
     this.setState({
+      // When the formKey prop changes, it causes the <Form /> component to recreate the DOM nodes that it manages.
+      // This permits us to reset the defaultValue for the MentionAutcompleteTextArea component without having to change
+      // MentionAutcompleteTextArea component's implementation.
+      formKey: new Date().toISOString(),
       title: this.article.title || '',
       tagList: this.article.cached_tag_list || '',
-      description: '',
-      canonicalUrl: this.article.canonical_url || '',
-      series: this.state.series || '',
-      allSeries: this.article.all_series || [],
+      description: '', // eslint-disable-line react/no-unused-state
+      canonicalUrl: this.article.canonical_url || '', // eslint-disable-line react/no-unused-state
+      series: this.article.series || '', // eslint-disable-line react/no-unused-state
+      allSeries: this.article.all_series || [], // eslint-disable-line react/no-unused-state
       bodyMarkdown: this.article.body_markdown || '',
       published: this.article.published || false,
       previewShowing: false,
-      helpShowing: false,
       previewResponse: '',
-      helpHTML: document.getElementById('editor-help-guide').innerHTML,
       submitting: false,
-      editing: this.artical.id !== null,
-      imageManagementShowing: false,
-      moreConfigShowing: false,
+      editing: this.article.id !== null, // eslint-disable-line react/no-unused-state
       mainImage: this.article.main_image || null,
       errors: null,
       edited: false,
+      helpFor: null,
+      helpPosition: 0,
+      isModalOpen: false,
     });
   };
 
-  handleArticleError = response => {
+  handleArticleError = (response) => {
     window.scrollTo(0, 0);
     this.setState({
       errors: response,
@@ -327,185 +347,138 @@ export default class ArticleForm extends Component {
     });
   };
 
+  showModal = (isModalOpen) => {
+    if (this.state.edited) {
+      this.setState({
+        isModalOpen,
+      });
+    } else {
+      // If the user has not edited the body we send them home
+      window.location.href = '/';
+    }
+  };
+
+  switchHelpContext = ({ target }) => {
+    this.setState({
+      ...this.setCommonProps({
+        helpFor: target.id,
+        helpPosition: target.getBoundingClientRect().y,
+      }),
+    });
+  };
+
   render() {
-    // cover image url should asking for url OR providing option to upload an image
     const {
       title,
       tagList,
       bodyMarkdown,
       published,
       previewShowing,
-      helpShowing,
       previewResponse,
-      helpHTML,
       submitting,
-      imageManagementShowing,
-      moreConfigShowing,
       organizations,
       organizationId,
       mainImage,
       errors,
       edited,
       version,
+      helpFor,
+      helpPosition,
+      siteLogo,
+      markdownLintErrors,
+      formKey,
     } = this.state;
-    const notice = submitting ? (
-      <Notice published={published} version={version} />
-    ) : (
-      ''
-    );
-    const imageArea =
-      mainImage && !previewShowing && version === 'v2' ? (
-        <MainImage mainImage={mainImage} onEdit={this.toggleImageManagement} />
-      ) : (
-        ''
-      );
-    const imageManagement = imageManagementShowing ? (
-      <ImageManagement
-        onExit={this.toggleImageManagement}
-        mainImage={mainImage}
-        version={version}
-        onMainImageUrlChange={this.handleMainImageUrlChange}
-      />
-    ) : (
-      ''
-    );
-    const moreConfig = moreConfigShowing ? (
-      <MoreConfig
-        onExit={this.toggleMoreConfig}
-        passedData={this.state}
-        onSaveDraft={this.onSaveDraft}
-        onConfigChange={this.handleConfigChange}
-      />
-    ) : (
-      ''
-    );
-    const orgArea =
-      organizations && organizations.length > 0 ? (
-        <div className="articleform__orgsettings">
-          Publish under an organization:
-          <OrganizationPicker
-            name="article[organization_id]"
-            id="article_publish_under_org"
-            organizations={organizations}
-            organizationId={organizationId}
-            onToggle={this.handleOrgIdChange}
-          />
-        </div>
-      ) : null;
-    const errorsArea = errors ? <Errors errorsList={errors} /> : '';
-    let editorView = '';
-    if (previewShowing) {
-      editorView = (
-        <div>
-          {errorsArea}
-          {orgArea}
-          {imageArea}
-          <BodyPreview
-            previewResponse={previewResponse}
-            articleState={this.state}
-            version="article-preview"
-          />
-        </div>
-      );
-    } else if (helpShowing) {
-      editorView = (
-        <BodyPreview
-          previewResponse={{ processed_html: helpHTML }}
-          version="help"
-        />
-      );
-    } else {
-      let controls = '';
-      let moreConfigBottomButton = '';
-      if (version === 'v2') {
-        moreConfigBottomButton = (
-          <SetupImageButton
-            className="articleform__detailsButton articleform__detailsButton--moreconfig articleform__detailsButton--bottom"
-            imgSrc={ThreeDotsIcon}
-            imgAltText="menu dots"
-            onClickCallback={this.toggleMoreConfig}
-          />
-        );
-        controls = (
-          <div
-            className={title.length > 128 ? 'articleform__titleTooLong' : ''}
-          >
-            <Title
-              defaultValue={title}
-              onKeyDown={this.handleTitleKeyDown}
-              onChange={linkState(this, 'title')}
-            />
-            <div className="articleform__detailfields">
-              <Tags
-                defaultValue={tagList}
-                onInput={linkState(this, 'tagList')}
-                maxTags={4}
-                autoComplete="off"
-                classPrefix="articleform"
-              />
-              <SetupImageButton
-                className="articleform__detailsButton articleform__detailsButton--image"
-                imgSrc={ImageUploadIcon}
-                imgAltText="Upload images"
-                onClickCallback={this.toggleImageManagement}
-              />
-              <SetupImageButton
-                className="articleform__detailsButton articleform__detailsButton--moreconfig"
-                imgSrc={ThreeDotsIcon}
-                imgAltText="Menu"
-                onClickCallback={this.toggleMoreConfig}
-              />
-            </div>
-          </div>
-        );
-      }
-      editorView = (
-        <div>
-          {errorsArea}
-          {orgArea}
-          {imageArea}
-          {controls}
-          <BodyMarkdown
-            defaultValue={bodyMarkdown}
-            onKeyDown={this.handleBodyKeyDown}
-            onChange={linkState(this, 'bodyMarkdown')}
-          />
-          <button
-            className="articleform__detailsButton articleform__detailsButton--image articleform__detailsButton--bottom"
-            onClick={this.toggleImageManagement}
-            type="button"
-          >
-            <img src={ImageUploadIcon} alt="upload images" />
-            IMAGES
-          </button>
-          {moreConfigBottomButton}
-        </div>
-      );
-    }
+
     return (
       <form
-        className={`articleform__form articleform__form--${version}`}
+        ref={(element) => {
+          this.formElement = element;
+        }}
+        id="article-form"
+        className="crayons-article-form"
         onSubmit={this.onSubmit}
         onInput={this.toggleEdit}
+        aria-label="Edit post"
       >
-        {editorView}
-        <PublishToggle
+        <Header
+          onPreview={this.fetchPreview}
+          previewShowing={previewShowing}
+          organizations={organizations}
+          organizationId={organizationId}
+          onToggle={this.handleOrgIdChange}
+          siteLogo={siteLogo}
+          displayModal={() => this.showModal(true)}
+        />
+
+        {previewShowing ? (
+          <Preview
+            previewResponse={previewResponse}
+            articleState={this.state}
+            errors={errors}
+            markdownLintErrors={markdownLintErrors}
+          />
+        ) : (
+          <Form
+            key={formKey}
+            titleDefaultValue={title}
+            titleOnChange={linkState(this, 'title')}
+            tagsDefaultValue={tagList}
+            tagsOnInput={linkState(this, 'tagList')}
+            bodyDefaultValue={bodyMarkdown}
+            bodyOnChange={linkState(this, 'bodyMarkdown')}
+            bodyHasFocus={false}
+            version={version}
+            mainImage={mainImage}
+            onMainImageUrlChange={this.handleMainImageUrlChange}
+            errors={errors}
+            switchHelpContext={this.switchHelpContext}
+          />
+        )}
+
+        <Help
+          previewShowing={previewShowing}
+          helpFor={helpFor}
+          helpPosition={helpPosition}
+          version={version}
+        />
+        {this.state.isModalOpen && (
+          <Modal
+            size="s"
+            title="You have unsaved changes"
+            onClose={() => this.showModal(false)}
+          >
+            <p>
+              You've made changes to your post. Do you want to navigate to leave
+              this page?
+            </p>
+            <div className="pt-4">
+              <Button className="mr-2" variant="danger" url="/" tagName="a">
+                Yes, leave the page
+              </Button>
+              <Button variant="secondary" onClick={() => this.showModal(false)}>
+                No, keep editing
+              </Button>
+            </div>
+          </Modal>
+        )}
+
+        <EditorActions
           published={published}
           version={version}
-          previewShowing={previewShowing}
-          helpShowing={helpShowing}
-          onPreview={this.fetchPreview}
           onPublish={this.onPublish}
-          onHelp={this.toggleHelp}
           onSaveDraft={this.onSaveDraft}
           onClearChanges={this.onClearChanges}
           edited={edited}
-          onChange={linkState(this, 'published')}
+          passedData={this.state}
+          onConfigChange={this.handleConfigChange}
+          submitting={submitting}
         />
-        <KeyboardShortcutsHandler togglePreview={this.fetchPreview} />
-        {notice}
-        {imageManagement}
-        {moreConfig}
+
+        <KeyboardShortcuts
+          shortcuts={{
+            'ctrl+shift+KeyP': this.fetchPreview,
+          }}
+        />
       </form>
     );
   }

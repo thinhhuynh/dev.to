@@ -1,105 +1,92 @@
-'use strict';
-
-/* global userData, filterXSS */
-
-function initializeUserProfileContent(user) {
-  document.getElementById('sidebar-profile-pic').innerHTML =
-    '<img alt="' +
-    user.username +
-    '" class="sidebar-profile-pic-img" src="' +
-    user.profile_image_90 +
-    '" />';
-
-  document.getElementById('sidebar-profile-name').innerHTML = filterXSS(
-    user.name,
-  );
-  document.getElementById('sidebar-profile-username').innerHTML =
-    '@' + user.username;
-  document.getElementById('sidebar-profile-snapshot-inner').href =
-    '/' + user.username;
-}
-
-function initializeUserSidebar(user) {
-  if (!document.getElementById('sidebar-nav')) return;
-  initializeUserProfileContent(user);
-
-  let followedTags = JSON.parse(user.followed_tags);
-  const tagSeparatorLabel =
-    followedTags.length === 0
-      ? 'Follow tags to improve your feed'
-      : 'Other Popular Tags';
-  document.getElementById('tag-separator').innerHTML = tagSeparatorLabel;
-
-  // sort tags by descending weigth, descending popularity and name
-  followedTags.sort((tagA, tagB) => {
-    return (
-      tagB.points - tagA.points ||
-      tagB.hotness_score - tagA.hotness_score ||
-      tagA.name.localeCompare(tagB.name)
-    );
-  });
-
-  let tagHTML = '';
-  followedTags.forEach(tag => {
-    var element = document.getElementById(
-      'default-sidebar-element-' + tag.name,
-    );
-    tagHTML +=
-      tag.points > 0.0
-        ? '<div class="sidebar-nav-element" id="sidebar-element-' +
-          tag.name +
-          '">' +
-          '<a class="sidebar-nav-link" href="/t/' +
-          tag.name +
-          '">' +
-          '<span class="sidebar-nav-tag-text">#' +
-          tag.name +
-          '</span>' +
-          '</a>' +
-          '</div>'
-        : '';
-    if (element) element.remove();
-  });
-  document.getElementById('sidebar-nav-followed-tags').innerHTML = tagHTML;
-  document.getElementById('sidebar-nav-default-tags').classList.add('showing');
+/* global filterXSS */
+function initializeProfileImage(user) {
+  if (!document.getElementById('comment-primary-user-profile--avatar')) return;
+  document.getElementById('comment-primary-user-profile--avatar').src =
+    user.profile_image_90;
 }
 
 function addRelevantButtonsToArticle(user) {
   var articleContainer = document.getElementById('article-show-container');
-  if (articleContainer) {
+
+  if (
+    articleContainer &&
+    articleContainer.dataset.buttonsInitialized !== 'true'
+  ) {
+    let actions = [];
+    const published = JSON.parse(articleContainer.dataset.published);
+
     if (parseInt(articleContainer.dataset.authorId, 10) === user.id) {
-      let actions = [
-        `<a href="${articleContainer.dataset.path}/edit" rel="nofollow">EDIT</a>`,
-      ];
-      if (JSON.parse(articleContainer.dataset.published) === true) {
+      actions.push(
+        `<a class="crayons-btn crayons-btn--s crayons-btn--secondary" href="${articleContainer.dataset.path}/edit" rel="nofollow">Edit</a>`,
+      );
+
+      let clickToEditButton = document.getElementById('author-click-to-edit');
+      if (clickToEditButton) {
+        clickToEditButton.style.display = 'inline-block';
+      }
+
+      if (published === true) {
         actions.push(
-          `<a href="${articleContainer.dataset.path}/manage" rel="nofollow">MANAGE</a>`,
+          `<a class="crayons-btn crayons-btn--s crayons-btn--secondary ml-1" href="${articleContainer.dataset.path}/manage" rel="nofollow">Manage</a>`,
         );
       }
-      if (user.pro) {
-        actions.push(
-          `<a href="${articleContainer.dataset.path}/stats" rel="nofollow">STATS</a>`,
-        );
-      }
-      document.getElementById('action-space').innerHTML = actions.join('');
-    } else if (user.trusted) {
-      document.getElementById('action-space').innerHTML =
-        '<a href="' +
-        articleContainer.dataset.path +
-        '/mod" rel="nofollow">MODERATE <span class="post-word">POST</span></a>';
+
+      actions.push(
+        `<a class="crayons-btn crayons-btn--s crayons-btn--secondary ml-1" href="${articleContainer.dataset.path}/stats" rel="nofollow">Stats</a>`,
+      );
     }
+
+    const { articleId, pinnedArticleId } = articleContainer.dataset;
+
+    // we hide the buttons for draft articles, for non admins and
+    // if there's already a pinned post different from the current one
+    if (
+      published &&
+      user.admin &&
+      (articleId === pinnedArticleId || !pinnedArticleId)
+    ) {
+      const isArticlePinned = articleContainer.hasAttribute('data-pinned');
+      const { pinPath } = articleContainer.dataset;
+
+      actions.push(
+        `<button
+            id="js-${isArticlePinned ? 'unpin' : 'pin'}-article"
+            class="crayons-btn crayons-btn--s crayons-btn--secondary ml-1"
+            data-path="${pinPath}"
+            data-article-id="${articleId}">${
+          isArticlePinned ? 'Unpin' : 'Pin'
+        } Post</button>`,
+      );
+    }
+
+    document.getElementById('action-space').innerHTML = actions.join('');
+    articleContainer.dataset.buttonsInitialized = 'true';
   }
 }
 
 function addRelevantButtonsToComments(user) {
   if (document.getElementById('comments-container')) {
+    // buttons are actually <span>'s
     var settingsButts = document.getElementsByClassName('comment-actions');
 
     for (let i = 0; i < settingsButts.length; i += 1) {
       let butt = settingsButts[i];
-      if (parseInt(butt.dataset.userId, 10) === user.id) {
-        butt.className = 'comment-actions';
-        butt.style.display = 'inline-block';
+      const { action, commentableUserId, userId } = butt.dataset;
+      if (parseInt(userId, 10) === user.id && action === 'settings-button') {
+        butt.innerHTML =
+          '<a href="' +
+          butt.dataset.path +
+          '" rel="nofollow" class="crayons-link crayons-link--block" data-no-instant>Settings</a>';
+        butt.classList.remove('hidden');
+        butt.classList.add('block');
+      }
+
+      if (
+        action === 'hide-button' &&
+        parseInt(commentableUserId, 10) === user.id
+      ) {
+        butt.classList.remove('hidden');
+        butt.classList.add('block');
       }
     }
 
@@ -107,26 +94,39 @@ function addRelevantButtonsToComments(user) {
       var modButts = document.getElementsByClassName('mod-actions');
       for (let i = 0; i < modButts.length; i += 1) {
         let butt = modButts[i];
+        if (butt.classList.contains('mod-actions-comment-button')) {
+          butt.innerHTML =
+            '<a href="' +
+            butt.dataset.path +
+            '" rel="nofollow" class="crayons-link crayons-link--block">Moderate</a>';
+        }
         butt.className = 'mod-actions';
-        butt.style.display = 'inline-block';
+        butt.classList.remove('hidden');
+        butt.classList.add('block');
       }
     }
   }
 }
 
+function setCurrentUserToNavBar(user) {
+  const userNavLink = document.getElementById('first-nav-link');
+  userNavLink.href = `/${user.username}`;
+  userNavLink.getElementsByTagName('span')[0].textContent = user.name;
+  userNavLink.getElementsByTagName(
+    'small',
+  )[0].textContent = `@${user.username}`;
+  document.getElementById('nav-profile-image').src = user.profile_image_90;
+  if (user.admin) {
+    document
+      .getElementsByClassName('js-header-menu-admin-link')[0]
+      .classList.remove('hidden');
+  }
+}
+
 function initializeBaseUserData() {
   const user = userData();
-  const userProfileLinkHTML =
-    '<a href="/' +
-    user.username +
-    '" id="first-nav-link"><div class="option prime-option">@' +
-    user.username +
-    '</div></a>';
-  document.getElementById(
-    'user-profile-link-placeholder',
-  ).innerHTML = userProfileLinkHTML;
-  document.getElementById('nav-profile-image').src = user.profile_image_90;
-  initializeUserSidebar(user);
+  setCurrentUserToNavBar(user);
+  initializeProfileImage(user);
   addRelevantButtonsToArticle(user);
   addRelevantButtonsToComments(user);
 }

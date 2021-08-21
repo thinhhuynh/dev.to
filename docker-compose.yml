@@ -1,30 +1,133 @@
 version: "3"
 services:
-  web:
-    build: .
+  rails:
+    image: quay.io/forem/forem:development
+    container_name: forem_rails
+    user: root
     ports:
       - "3000:3000"
     depends_on:
+      - bundle
       - db
+      - redis
+      - yarn
     environment:
       RAILS_ENV: development
-      DATABASE_URL: postgres://postgres:mysecretpassword@db:5432/postgres
-      YARN_INTEGRITY_ENABLED: "false"
+      DATABASE_URL: postgresql://forem:forem@db:5432/PracticalDeveloper_development
+      REDIS_SESSIONS_URL: redis://redis:6379
+      REDIS_SIDEKIQ_URL: redis://redis:6379
+      REDIS_URL: redis://redis:6379
+      RACK_TIMEOUT_WAIT_TIMEOUT: 10000
+      RACK_TIMEOUT_SERVICE_TIMEOUT: 10000
+      STATEMENT_TIMEOUT: 10000
+      APP_DOMAIN: localhost:3000
     volumes:
-      - .:/usr/src/app
-    command: bundle exec rails server -b 0.0.0.0 -p 3000
-  jobs:
-    build: .
-    command: rails jobs:work
+      - .:/opt/apps/forem:delegated
+    entrypoint: ["dockerize", "-wait", "tcp://db:5432", "-wait", "tcp://redis:6379", "-wait", "file:///opt/apps/forem/vendor/bundle/.bundle_finished", "-timeout", "2700s", "-wait-retry-interval", "10s"]
+    command: [ "bash", "-c", "./scripts/entrypoint.sh bootstrap && bundle exec rails server -b 0.0.0.0 -p 3000"]
+
+  bundle:
+    image: quay.io/forem/forem:development
+    container_name: forem_bundle
+    user: root
+    environment:
+      RAILS_ENV: development
+      REDIS_SESSIONS_URL: redis://redis:6379
+      REDIS_SIDEKIQ_URL: redis://redis:6379
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://forem:forem@db:5432/PracticalDeveloper_development
+    volumes:
+      - .:/opt/apps/forem:delegated
+    command: ["./scripts/bundle.sh"]
+
+  yarn:
+    image: quay.io/forem/forem:development
+    container_name: forem_yarn
+    user: root
+    environment:
+      RAILS_ENV: development
+      REDIS_SESSIONS_URL: redis://redis:6379
+      REDIS_SIDEKIQ_URL: redis://redis:6379
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://forem:forem@db:5432/PracticalDeveloper_development
+    volumes:
+      - .:/opt/apps/forem:delegated
+    command: yarn install --dev
+
+  webpacker:
+    image: quay.io/forem/forem:development
+    container_name: forem_webpacker
+    user: root
     depends_on:
+      - bundle
+      - rails
+      - yarn
+    environment:
+      RAILS_ENV: development
+      REDIS_SESSIONS_URL: redis://redis:6379
+      REDIS_SIDEKIQ_URL: redis://redis:6379
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://forem:forem@db:5432/PracticalDeveloper_development
+    volumes:
+      - .:/opt/apps/forem:delegated
+    entrypoint: ["dockerize", "-wait", "file:///opt/apps/forem/node_modules/.bin/webpack-dev-server", "-wait", "file:///opt/apps/forem/vendor/bundle/.bundle_finished", "-timeout", "2700s", "-wait-retry-interval", "10s"]
+    command: ["./bin/webpack-dev-server"]
+
+  seed:
+    image: quay.io/forem/forem:development
+    container_name: forem_seed
+    user: root
+    depends_on:
+      - rails
+      - redis
       - db
     environment:
       RAILS_ENV: development
-      DATABASE_URL: postgres://postgres:mysecretpassword@db:5432/postgres
-  webpacker:
-    build: .
-    command: ./bin/webpack-dev-server
+      REDIS_SESSIONS_URL: redis://redis:6379
+      REDIS_SIDEKIQ_URL: redis://redis:6379
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://forem:forem@db:5432/PracticalDeveloper_development
+    volumes:
+      - .:/opt/apps/forem:delegated
+    entrypoint: ["dockerize", "-wait", "tcp://db:5432", "-wait", "tcp://redis:6379", "-wait", "tcp://rails:3000", "-timeout", "2700s", "-wait-retry-interval", "20s"]
+    command: ["bundle", "exec", "rake","db:seed"]
+
+  sidekiq:
+    image: quay.io/forem/forem:development
+    container_name: forem_sidekiq
+    user: root
+    depends_on:
+      - rails
+      - redis
+      - db
+    environment:
+      RAILS_ENV: development
+      REDIS_SESSIONS_URL: redis://redis:6379
+      REDIS_SIDEKIQ_URL: redis://redis:6379
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://forem:forem@db:5432/PracticalDeveloper_development
+    volumes:
+      - .:/opt/apps/forem:delegated
+    entrypoint: ["dockerize", "-wait", "tcp://db:5432", "-wait", "tcp://redis:6379", "-wait", "tcp://rails:3000", "-timeout", "2700s", "-wait-retry-interval", "20s"]
+    command: ["bundle", "exec", "sidekiq","-c","2"]
+
   db:
-    image: postgres:${POSTGRES_VERSION:-9.6.15-alpine}
+    image: postgres:11-alpine
+    container_name: forem_postgresql
+    environment:
+      POSTGRES_USER: forem
+      POSTGRES_PASSWORD: forem
+      POSTGRES_DB: PracticalDeveloper_development
     ports:
       - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data:delegated
+
+  redis:
+    image: redis:6.0.9-alpine
+    container_name: forem_redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  db_data:

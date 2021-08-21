@@ -10,12 +10,12 @@ RSpec.describe FollowPolicy, type: :policy do
   end
 
   context "when user is signed in" do
-    let(:user) { build_stubbed(:user) }
+    let!(:user) { create(:user) }
 
     it { is_expected.to permit_actions(%i[create]) }
 
-    context "when user is banned" do
-      before { user.add_role(:banned) }
+    context "when user is suspended" do
+      before { user.add_role(:suspended) }
 
       it { is_expected.to forbid_actions(%i[create]) }
     end

@@ -1,9 +1,9 @@
 import { h, render } from 'preact';
-import { Search } from '../src/components/Search';
-import 'focus-visible'
+import 'focus-visible';
+import { SearchFormSync } from '../Search/SearchFormSync';
 
 document.addEventListener('DOMContentLoaded', () => {
-  const root = document.getElementById('nav-search-form-root');
+  const root = document.getElementById('header-search');
 
-  render(<Search />, root, root.firstElementChild);
+  render(<SearchFormSync />, root);
 });

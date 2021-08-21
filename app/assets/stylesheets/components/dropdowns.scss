@@ -1,0 +1,38 @@
+@import '../config/import';
+
+.crayons-dropdown {
+  @include generate-box(
+    $level: 2,
+    $bg: var(--card-bg),
+    $border: var(--card-color),
+    $color: var(--card-color)
+  );
+  position: absolute;
+  display: none; // initially hidden
+  padding: var(--su-4);
+  min-width: 250px;
+  z-index: var(--z-dropdown);
+
+  @media (min-width: $breakpoint-s) {
+    max-width: 360px;
+    width: max-content;
+  }
+
+  &.side-bar {
+    bottom: 100%;
+    font-size: var(--fs-base);
+    padding: var(--su-1);
+    right: var(--su-1);
+    @media (min-width: $breakpoint-m) {
+      right: auto;
+      bottom: auto;
+      top: 0;
+    }
+  }
+
+  &.reverse {
+    // Flips the dropdown to drop-upwards when set
+    bottom: 100%;
+    top: unset;
+  }
+}

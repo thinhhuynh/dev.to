@@ -1,12 +1,12 @@
-<footer>
-  <div id="footer-container" class="container <%= "centered-footer" unless current_page.include?("stories-show") %>">
-    <div class="inner-footer-container">
-      <a href="/">Home</a> <a href="/about">About</a> <a href="/privacy">Privacy Policy</a>
-      <a href="/terms">Terms of Use</a> <a href="/contact">Contact</a> <a href="/code-of-conduct">Code of Conduct</a><br/>
-      <%= ApplicationConfig["COMMUNITY_NAME"] %> Community copyright 2016 - <%= Time.current.year %>&nbsp; 🔥
+<footer class="crayons-footer print-hidden">
+  <div id="footer-container" class="crayons-layout crayons-layout--limited-m crayons-footer__container">
+    <p class="fs-s crayons-footer__description"><a href="/" aria-label="<%= community_name %> Home" class="crayons-link"><%= community_name %></a> – <%= Settings::Community.community_description %></p>
+    <div class="m:-mb-4 crayons-footer__description">
+      <%# The following copy is necessary for compatibility with the Forem AGPL licence which requires instances to link back to the source. %>
+      <p class="fs-s">Built on <a href="https://www.forem.com" class="crayons-link" target="_blank" rel="noopener">Forem</a> — the <a href="https://dev.to/t/opensource" target="_blank" rel="noopener" class="crayons-link">open source</a> software that powers <a href="https://dev.to" target="_blank" rel="noopener" class="crayons-link">DEV</a> and other inclusive communities.</p>
+      <p class="fs-s">Made with love and <a href="https://dev.to/t/rails" target="_blank" rel="noopener" class="crayons-link">Ruby on Rails</a>. <%= community_name %> <span title="copyright">&copy;</span> <%= copyright_notice %>.</p>
+      <div><a href="https://www.forem.com" target="_blank" rel="noopener" class="inline-block mt-4"><%= inline_svg_tag("logo-forem.svg", aria: true, class: "crayons-icon crayons-icon--default", title: "Forem logo") %></a></div>
     </div>
   </div>
 </footer>
-<% if Rails.env.production? %>
-  <%= javascript_include_tag "hello-dev.js", defer: true %>
-<% end %>
+<div id="snack-zone"></div>

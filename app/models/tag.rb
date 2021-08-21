@@ -1,46 +1,50 @@
 class Tag < ActsAsTaggableOn::Tag
-  attr_accessor :points
+  attr_accessor :points, :tag_moderator_id, :remove_moderator_id
 
-  include AlgoliaSearch
   acts_as_followable
   resourcify
 
-  NAMES = %w[
-    beginners career computerscience git go java javascript react vue webassembly
-    linux productivity python security webdev css php laravel opensource npm a11y
-    ruby cpp dotnet swift testing devops vim kotlin rust elixir graphql blockchain sre
-    scala vscode docker kubernetes aws android ios angular csharp typescript django rails
-    clojure ubuntu elm gamedev flutter dart bash machinelearning sql
-  ].freeze
+  # This model doesn't inherit from ApplicationRecord so this has to be included
+  include Purgeable
+  include PgSearch::Model
 
   ALLOWED_CATEGORIES = %w[uncategorized language library tool site_mechanic location subcommunity].freeze
-
-  attr_accessor :tag_moderator_id, :remove_moderator_id
+  HEX_COLOR_REGEXP = /\A#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})\z/.freeze
 
   belongs_to :badge, optional: true
+  belongs_to :mod_chat_channel, class_name: "ChatChannel", optional: true
+
+  has_many :articles, through: :taggings, source: :taggable, source_type: "Article"
+
   has_one :sponsorship, as: :sponsorable, inverse_of: :sponsorable, dependent: :destroy
 
   mount_uploader :profile_image, ProfileImageUploader
   mount_uploader :social_image, ProfileImageUploader
 
-  validates :text_color_hex,
-            format: /\A#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})\z/, allow_nil: true
-  validates :bg_color_hex,
-            format: /\A#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})\z/, allow_nil: true
-  validates :category, inclusion: { in: ALLOWED_CATEGORIES }
+  validates :text_color_hex, format: HEX_COLOR_REGEXP, allow_nil: true
+  validates :bg_color_hex, format: HEX_COLOR_REGEXP, allow_nil: true
+  validates :category, presence: true, inclusion: { in: ALLOWED_CATEGORIES }
 
-  validate :validate_alias
+  validate :validate_alias_for, if: :alias_for?
+  validate :validate_name, if: :name?
+
   before_validation :evaluate_markdown
   before_validation :pound_it
+
   before_save :calculate_hotness_score
-  after_save :bust_cache
   before_save :mark_as_updated
 
-  algoliasearch per_environment: true do
-    attribute :name, :bg_color_hex, :text_color_hex, :hotness_score, :supported, :short_summary, :rules_html
-    attributesForFaceting [:supported]
-    customRanking ["desc(hotness_score)"]
-    searchableAttributes %w[name short_summary]
+  after_commit :bust_cache
+
+  pg_search_scope :search_by_name,
+                  against: :name,
+                  using: { tsearch: { prefix: true } }
+
+  scope :eager_load_serialized_data, -> {}
+
+  # possible social previews templates for articles with a particular tag
+  def self.social_preview_templates
+    Rails.root.join("app/views/social_previews/articles").children.map { |ch| File.basename(ch, ".html.erb") }
   end
 
   def submission_template_customized(param_0 = nil)
@@ -48,13 +52,7 @@ class Tag < ActsAsTaggableOn::Tag
   end
 
   def tag_moderator_ids
-    User.with_role(:tag_moderator, self).order("id ASC").pluck(:id)
-  end
-
-  def self.bufferized_tags
-    Rails.cache.fetch("bufferized_tags_cache", expires_in: 2.hours) do
-      where.not(buffer_profile_id_code: nil).pluck(:name)
-    end
+    User.with_role(:tag_moderator, self).order(id: :asc).ids
   end
 
   def self.valid_categories
@@ -68,28 +66,46 @@ class Tag < ActsAsTaggableOn::Tag
     tag.alias_for.presence || tag.name
   end
 
+  def self.find_preferred_alias_for(word)
+    find_by(name: word.downcase)&.alias_for.presence || word.downcase
+  end
+
+  def validate_name
+    errors.add(:name, "is too long (maximum is 30 characters)") if name.length > 30
+    # [:alnum:] is not used here because it supports diacritical characters.
+    # If we decide to allow diacritics in the future, we should replace the
+    # following regex with [:alnum:].
+    errors.add(:name, "contains non-ASCII characters") unless name.match?(/\A[[a-z0-9]]+\z/i)
+  end
+
+  def errors_as_sentence
+    errors.full_messages.to_sentence
+  end
+
   private
 
   def evaluate_markdown
-    self.rules_html = MarkdownParser.new(rules_markdown).evaluate_markdown
-    self.wiki_body_html = MarkdownParser.new(wiki_body_markdown).evaluate_markdown
+    self.rules_html = MarkdownProcessor::Parser.new(rules_markdown).evaluate_markdown
+    self.wiki_body_html = MarkdownProcessor::Parser.new(wiki_body_markdown).evaluate_markdown
   end
 
   def calculate_hotness_score
-    self.hotness_score = Article.tagged_with(name).
-      where("articles.featured_number > ?", 7.days.ago.to_i).
-      map do |article|
-        (article.comments_count * 14) + (article.reactions_count * 4) + rand(6) + ((taggings_count + 1) / 2)
-      end.
-      sum
+    self.hotness_score = Article.tagged_with(name)
+      .where("articles.featured_number > ?", 7.days.ago.to_i)
+      .sum do |article|
+        (article.comments_count * 14) + article.score + rand(6) + ((taggings_count + 1) / 2)
+      end
   end
 
   def bust_cache
-    Tags::BustCacheJob.perform_later(name)
+    Tags::BustCacheWorker.perform_async(name)
+    Rails.cache.delete("view-helper-#{name}/tag_colors")
   end
 
-  def validate_alias
-    errors.add(:tag, "alias_for must refer to existing tag") if alias_for.present? && !Tag.find_by(name: alias_for)
+  def validate_alias_for
+    return if Tag.exists?(name: alias_for)
+
+    errors.add(:tag, "alias_for must refer to an existing tag")
   end
 
   def pound_it

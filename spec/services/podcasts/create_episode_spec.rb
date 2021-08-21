@@ -27,6 +27,11 @@ RSpec.describe Podcasts::CreateEpisode, type: :service do
       expect(episode.guid).to include("53b17a1e-271b-40e3-a084-a67b4fcba562")
     end
 
+    it "populates processed_html" do
+      episode = described_class.call(podcast.id, item)
+      expect(episode.processed_html).not_to be_blank
+    end
+
     it "sets correct availability statuses" do
       episode = described_class.call(podcast.id, item)
       expect(episode.https?).to be true
@@ -51,7 +56,9 @@ RSpec.describe Podcasts::CreateEpisode, type: :service do
   context "when item has an http media url" do
     let(:rss_item) { RSS::Parser.parse("spec/support/fixtures/podcasts/awayfromthekeyboard.rss", false).items.first }
     let!(:item) { Podcasts::EpisodeRssItem.from_item(rss_item) }
-    let(:https_url) { "https://awayfromthekeyboard.com/wp-content/uploads/2018/02/Episode_075_Lara_Hogan_Demystifies_Public_Speaking.mp3" }
+    let(:https_url) do
+      "https://awayfromthekeyboard.com/wp-content/uploads/2018/02/Episode_075_Lara_Hogan_Demystifies_Public_Speaking.mp3"
+    end
 
     it "sets media_url to https version when it is available" do
       stub_request(:head, https_url).to_return(status: 200)
@@ -68,6 +75,26 @@ RSpec.describe Podcasts::CreateEpisode, type: :service do
       expect(episode.media_url).to eq(item.enclosure_url)
       expect(episode.https?).to be false
       expect(episode.reachable).to be true
+    end
+  end
+
+  context "when attempting to create duplicate episodes" do
+    let(:rss_item) { RSS::Parser.parse("spec/support/fixtures/podcasts/developertea.rss", false).items.first }
+    let(:item) { Podcasts::EpisodeRssItem.from_item(rss_item) }
+    let!(:episode) { create(:podcast_episode, title: "outdated title", media_url: item.enclosure_url) }
+
+    before do
+      stub_request(:head, item.enclosure_url).to_return(status: 200)
+    end
+
+    it "updates existing episode" do
+      new_episode = described_class.call(podcast.id, item)
+      expect(new_episode.id).to eq(episode.id)
+    end
+
+    it "updates columns" do
+      new_episode = described_class.call(podcast.id, item)
+      expect(new_episode.title).to eq(item.title)
     end
   end
 end

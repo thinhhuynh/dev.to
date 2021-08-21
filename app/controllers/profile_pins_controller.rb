@@ -8,9 +8,9 @@ class ProfilePinsController < ApplicationController
     @profile_pin.pinnable_id = profile_pin_params[:pinnable_id].to_i
     @profile_pin.pinnable_type = "Article"
     if @profile_pin.save
-      flash[:pins_success] = "📌 Pinned! (pinned posts display chronologically, 5 max)"
+      flash[:success] = "📌 Pinned! (pinned posts display chronologically, 5 max)"
     else
-      flash[:pins_error] = "You can only have five pins"
+      flash[:error] = "You can only have five pins"
     end
     redirect_back(fallback_location: "/dashboard")
     bust_user_profile
@@ -31,7 +31,8 @@ class ProfilePinsController < ApplicationController
   end
 
   def bust_user_profile
-    CacheBuster.new.bust(current_user.path)
-    CacheBuster.new.bust(current_user.path + "?i=i")
+    cache_bust = EdgeCache::Bust.new
+    cache_bust.call(current_user.path)
+    cache_bust.call("#{current_user.path}?i=i")
   end
 end

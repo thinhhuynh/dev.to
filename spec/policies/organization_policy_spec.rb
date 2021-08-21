@@ -18,8 +18,8 @@ RSpec.describe OrganizationPolicy, type: :policy do
     it { is_expected.to permit_action(:create) }
   end
 
-  context "when user is banned" do
-    let(:user) { build(:user, :banned) }
+  context "when user is suspended" do
+    let(:user) { build(:user, :suspended) }
 
     it { is_expected.to forbid_actions(%i[create update]) }
   end
@@ -27,8 +27,8 @@ RSpec.describe OrganizationPolicy, type: :policy do
   context "when user is an org admin of an org" do
     subject(:organization_policy) { described_class.new(user, org) }
 
-    let(:user) { build_stubbed(:user) }
-    let(:org)  { build_stubbed(:organization) }
+    let(:user) { create(:user) }
+    let(:org)  { create(:organization) }
 
     before do
       create(:organization_membership, user: user, organization: org, type_of_user: "admin")
@@ -42,8 +42,8 @@ RSpec.describe OrganizationPolicy, type: :policy do
   context "when user is an org admin of another org" do
     subject(:organization_policy) { described_class.new(user, new_org) }
 
-    let(:user) { build_stubbed(:user) }
-    let(:org)  { build_stubbed(:organization) }
+    let(:user) { create(:user) }
+    let(:org)  { create(:organization) }
     let(:new_org) { build_stubbed(:organization) }
 
     before { create(:organization_membership, user: user, organization: org, type_of_user: "admin") }

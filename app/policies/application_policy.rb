@@ -13,7 +13,7 @@ class ApplicationPolicy
   end
 
   def show?
-    scope.where(id: record.id).exists?
+    scope.exists?(id: record.id)
   end
 
   def create?
@@ -67,11 +67,13 @@ class ApplicationPolicy
     user.has_role?(:super_admin)
   end
 
-  def user_is_banned?
-    user.banned
+  def support_admin?
+    user.has_role?(:support_admin)
   end
 
-  def user_is_trusted?
+  delegate :suspended?, to: :user, prefix: true
+
+  def user_trusted?
     user.has_role?(:trusted)
   end
 end

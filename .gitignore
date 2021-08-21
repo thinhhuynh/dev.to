@@ -36,12 +36,16 @@ latest.dump
 
 # Ignore application configuration
 /config/application.yml
+/config/application_unused.yml
 /public/packs
 /public/packs-test
 /node_modules
+yarn-debug.log*
+.yarn-integrity
+.env
 
 # Ignore storybook static site generation
-storybook-static/
+app/javascript/storybook-static/
 yarn-error.log
 
 # Ignore package-lock.json because we use yarn
@@ -50,8 +54,12 @@ package-lock.json
 #Jetbrains Tools
 .idea/
 
+#Nova from Panic
+.nova/
+
 #sitemap
 /public/sitemap.xml.gz
+/public/sitemaps/
 
 # Development Docker storage location
 _docker-storage/
@@ -67,5 +75,31 @@ docs/.static/api/
 # rvm
 .ruby-gemset
 
+# rbenv
+.rbenv-vars
+
 # asdf
 .tool-versions
+
+# Container volumes
+db_data
+es_data
+gem_cache
+
+# Compose generated files
+bundle_finished
+
+# Auto-generated Storybook stories
+app/javascript/generated_stories/
+
+# Cypress test run artifacts
+cypress/videos
+cypress/screenshots
+cypress/logs
+
+# PostCSS error log
+postcss_error.log
+
+# ripgrep ignore file
+.rgignore
+config/definitions.rb

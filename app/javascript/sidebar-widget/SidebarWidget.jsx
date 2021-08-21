@@ -1,52 +1,35 @@
-import { h, Component } from 'preact';
-import sendFollowUser from '../src/utils/sendFollowUser';
-import SidebarUser from './sidebarUser';
+import { h } from 'preact';
+import { useEffect, useState } from 'preact/hooks';
+import { sendFollowUser } from '../utilities/sendFollowUser';
+import { SidebarUser } from './sidebarUser';
 
-class SidebarWidget extends Component {
-  constructor(props) {
-    super(props);
-    this.getSuggestedUsers = this.getSuggestedUsers.bind(this);
-    this.getTagInfo = this.getTagInfo.bind(this);
-    this.followUser = this.followUser.bind(this);
-    this.state = {
-      tagInfo: {},
-      suggestedUsers: [],
-    };
-  }
+export const SidebarWidget = () => {
+  const [suggestedUsers, setSuggestedUsers] = useState([]);
 
-  componentDidMount() {
-    this.getTagInfo();
-    this.getSuggestedUsers();
-  }
+  useEffect(() => {
+    const tagInfo = JSON.parse(
+      document.getElementById('sidebarWidget__pack').dataset.tagInfo,
+    );
 
-  getTagInfo() {
-    this.setState({
-      tagInfo: JSON.parse(
-        document.getElementById('sidebarWidget__pack').dataset.tagInfo,
-      ),
-    });
-  }
-
-  getSuggestedUsers() {
-    const { tagInfo } = this.state;
-    fetch(`/api/users?state=sidebar_suggestions&tag=${tagInfo.name}`, {
+    // Fetching suggested users
+    fetch(`/users?state=sidebar_suggestions&tag=${tagInfo.name}`, {
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
       },
       credentials: 'same-origin',
     })
-      .then(response => response.json())
-      .then(json => {
-        this.setState({ suggestedUsers: json });
+      .then((response) => response.json())
+      .then((json) => {
+        setSuggestedUsers(json);
       })
-      .catch(error => {
-        console.log(error);
+      .catch((error) => {
+        setSuggestedUsers([]);
+        Honeybadger.notify(error);
       });
-  }
+  }, []);
 
-  followUser(user) {
-    const { suggestedUsers } = this.state;
+  const followUser = (user) => {
     const updatedUser = user;
     const updatedSuggestedUsers = suggestedUsers;
     const userIndex = suggestedUsers.indexOf(user);
@@ -54,41 +37,32 @@ class SidebarWidget extends Component {
     const followBtn = document.getElementById(
       `widget-list-item__follow-button-${updatedUser.username}`,
     );
-    followBtn.innerText = updatedUser.following ? '+ FOLLOW' : '✓ FOLLOWING';
+    followBtn.innerText = updatedUser.following ? 'Follow' : 'Following';
 
-    const toggleFollowState = newFollowState => {
+    const toggleFollowState = (newFollowState) => {
       updatedUser.following = newFollowState === 'followed';
       updatedSuggestedUsers[userIndex] = updatedUser;
-      this.setState({ suggestedUsers: updatedSuggestedUsers });
+      setSuggestedUsers(updatedSuggestedUsers);
     };
     sendFollowUser(user, toggleFollowState);
+  };
+
+  if (suggestedUsers.length === 0) {
+    return null;
   }
 
-  render() {
-    const { suggestedUsers } = this.state;
-    const users = suggestedUsers.map((user, index) => (
-      <SidebarUser
-        key={user.id}
-        user={user}
-        followUser={this.followUser}
-        index={index}
-      />
-    ));
-
-    if (suggestedUsers.length > 0) {
-      return (
-        <div className="widget" id="widget-00001">
-          <div className="widget-suggested-follows-container">
-            <header>
-              <h4>who to follow</h4>
-            </header>
-            <div className="widget-body">{users}</div>
-          </div>
+  return (
+    <div className="widget" id="widget-00001">
+      <div className="widget-suggested-follows-container">
+        <header>
+          <h4>who to follow</h4>
+        </header>
+        <div className="widget-body">
+          {suggestedUsers.map((user) => (
+            <SidebarUser key={user.id} user={user} followUser={followUser} />
+          ))}
         </div>
-      );
-    }
-    return <div />;
-  }
-}
-
-export default SidebarWidget;
+      </div>
+    </div>
+  );
+};

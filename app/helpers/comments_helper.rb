@@ -1,5 +1,8 @@
 module CommentsHelper
-  def comment_class(comment, is_view_root = false)
+  MAX_COMMENTS_TO_RENDER = 250
+  MIN_COMMENTS_TO_RENDER = 8
+
+  def comment_class(comment, is_view_root: false)
     if comment.root? || is_view_root
       "root"
     else
@@ -15,9 +18,8 @@ module CommentsHelper
     commentable &&
       [
         commentable.user_id,
-        commentable.second_user_id,
-        commentable.third_user_id,
-      ].any? { |id| id == comment.user_id }
+        commentable.co_author_ids,
+      ].flatten.any?(comment.user_id)
   end
 
   def get_ama_or_op_banner(commentable)
@@ -28,13 +30,46 @@ module CommentsHelper
     nested_comments(tree: { comment => sub_comments }, commentable: commentable, is_view_root: true)
   end
 
+  def should_be_hidden?(comment, root_comment)
+    comment.hidden_by_commentable_user && comment != root_comment
+  end
+
+  def high_number_of_comments?(comments_number)
+    comments_number > MAX_COMMENTS_TO_RENDER
+  end
+
+  def view_all_comments?(comments_number)
+    comments_number > MIN_COMMENTS_TO_RENDER
+  end
+
+  def number_of_comments_to_render
+    MAX_COMMENTS_TO_RENDER
+  end
+
+  def comment_count(view)
+    view == "comments" ? MAX_COMMENTS_TO_RENDER : MIN_COMMENTS_TO_RENDER
+  end
+
+  def like_button_text(comment)
+    case comment.public_reactions_count
+    when 0
+      "Like"
+    when 1
+      "&nbsp;like"
+    else
+      "&nbsp;likes"
+    end
+  end
+
   private
 
   def nested_comments(tree:, commentable:, is_view_root: false)
-    tree.map do |comment, sub_comments|
+    comments = tree.map do |comment, sub_comments|
       render("comments/comment", comment: comment, commentable: commentable,
                                  is_view_root: is_view_root, is_childless: sub_comments.empty?,
                                  subtree_html: nested_comments(tree: sub_comments, commentable: commentable))
-    end.join.html_safe
+    end
+
+    safe_join(comments)
   end
 end

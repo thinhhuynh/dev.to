@@ -1,0 +1,26 @@
+<% title_string = "#{@collection.slug} Series' Articles" %>
+<% description_string = "View #{title_string} on #{community_name}" %>
+
+<%= content_for :page_meta do %>
+  <%= render "collections/meta", title_string: title_string, description_string: description_string, path: @collection.path %>
+<% end %>
+
+<main id="main-content" class="crayons-layout crayons-layout--1-col">
+  <header class="px-2 m:px-0">
+    <h1><%= title_string %></h1>
+    <%= link_to "Back to #{@user.name}'s Series", user_series_path(@user.username) %>
+  </header>
+
+  <div class="articles-list" id="articles-list">
+    <div class="substories" id="substories">
+      <% if @articles.present? %>
+        <% @articles.each do |article| %>
+          <%= render "articles/single_story", story: article.decorate, featured: article.main_image.present? %>
+        <% end %>
+        <%= javascript_packs_with_chunks_tag "followButtons", "feedPreviewCards", defer: true %>
+      <% else %>
+        <p>This series doesn't have any articles</p>
+      <% end %>
+    </div>
+  </div>
+</main>

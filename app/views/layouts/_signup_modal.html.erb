@@ -1,30 +1,32 @@
-<div class="global-signup-modal" id="global-signup-modal" style="display:none">
-  <div class="global-signup-modal--bg" id="global-signup-modal-bg">
-    <button type="button" class="close-modal-button">
-      <img src="<%= asset_path("cancel.svg") %>" class="search-img" alt="Close modal button" />
-    </button>
+<div id="global-signup-modal" class="authentication-modal hidden">
+<div class="authentication-modal__container">
+  <figure class="authentication-modal__image-container">
+    <img class="authentication-modal__image" src="<%= optimized_image_url(Settings::General.logo_png, width: 190) %>"
+      alt="<%= community_name %>" loading="lazy" />
+  </figure>
+  <div class="authentication-modal__content">
+    <p class="authentication-modal__description">
+      <% if Settings::Community.tagline.present? %>
+        <%= Settings::Community.tagline %>
+      <% else %>
+        We’d love for you to be a part of this community.
+      <% end %>
+    </p>
   </div>
-  <div class="global-signup-modal--inner-a">
-    <%= image_tag(cl_image_path(asset_path("/assets/sloan.png"),
-                                type: "fetch",
-                                width: 300,
-                                crop: "imagga_scale",
-                                quality: "auto",
-                                flags: "progressive",
-                                fetch_format: "auto",
-                                sign_url: true), class: "sloan", alt: "Sloan, the sloth mascot") %>
-    <h1>Join our <%= ApplicationConfig["COMMUNITY_NAME"] %> Community :)</h1>
-    <p>
-      We're a place where coders share, stay up-to-date and grow their careers.
-    </p>
-    <a href="/users/auth/twitter?callback_url=<%= ApplicationConfig["APP_PROTOCOL"] %><%= ApplicationConfig["APP_DOMAIN"] %>/users/auth/twitter/callback" class="sign-up-link cta" data-no-instant>
-      <img src="<%= asset_path("twitter-logo.svg") %>" class="icon-img" alt="Twitter logo" /> Auth With Twitter
+  <div class="authentication-modal__actions">
+    <a href="<%= sign_up_path %>" class="crayons-btn" aria-label="Log in" data-no-instant>
+      Log in
     </a>
-    <a href="/users/auth/github?state=signup-modal" class="sign-up-link cta" data-no-instant>
-      <img src="<%= asset_path("github-logo.svg") %>" class="icon-img" alt="GitHub logo" /> Auth With GitHub
+    <a href="<%= sign_up_path(state: "new-user") %>" class="crayons-btn crayons-btn--ghost-brand" aria-label="Create new account" data-no-instant>
+      Create new account
     </a>
-    <p>
-      <em>We strive for transparency and don't collect excess data.</em>
+  </div>
+  <footer class="authentication-modal__footer">
+    <p class="authentication-modal__footer-label">
+      We strive for transparency and don't collect excess data.
     </p>
+  </footer>
   </div>
 </div>
+
+<%= javascript_packs_with_chunks_tag "signupModalShortcuts", defer: true %>

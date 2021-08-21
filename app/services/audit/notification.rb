@@ -24,7 +24,7 @@ module Audit
       # end
 
       def notify(listener, &block)
-        return unless block_given?
+        return unless block
 
         ActiveSupport::Notifications.instrument(instrument_name(listener), Audit::Event::Payload.new(&block))
       end
@@ -34,9 +34,18 @@ module Audit
       # Then, this event is serialized and send to background job.
 
       def listen(*args)
-        ActiveSupport::Notifications::Event.new(*args).
-          then { |event| Audit::Event::Util.serialize(event) }.
-          then { |event_job| Audit::SaveToPersistentStorageJob.perform_later(event_job) }
+        event = ActiveSupport::Notifications::Event.new(*args)
+        AuditLog.create!(params_hash(event))
+      end
+
+      def params_hash(event)
+        {
+          user_id: event.payload.user_id,
+          roles: event.payload.roles,
+          slug: event.payload.slug,
+          category: event.name,
+          data: event.payload.data
+        }
       end
     end
   end

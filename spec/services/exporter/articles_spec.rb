@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe Exporter::Articles do
+RSpec.describe Exporter::Articles, type: :service do
   let(:user) { create(:user) }
   let(:article) { create(:article, user: user) }
   let(:other_user) { create(:user) }
@@ -23,12 +23,11 @@ RSpec.describe Exporter::Articles do
       description
       edited_at
       feed_source_url
-      language
       last_comment_at
       main_image
       main_image_background_hex_color
       path
-      positive_reactions_count
+      public_reactions_count
       processed_html
       published
       published_at
@@ -90,7 +89,7 @@ RSpec.describe Exporter::Articles do
         exporter = valid_instance(user)
         result = exporter.export(slug: article.slug)
         articles = load_articles(result)
-        expect(articles.first.keys).to eq(expected_fields)
+        expect(articles.first.keys).to match_array(expected_fields)
       end
     end
 
@@ -107,7 +106,7 @@ RSpec.describe Exporter::Articles do
         exporter = valid_instance(article.user)
         result = exporter.export
         articles = load_articles(result)
-        expect(articles.first.keys).to eq(expected_fields)
+        expect(articles.first.keys).to match_array(expected_fields)
       end
     end
   end

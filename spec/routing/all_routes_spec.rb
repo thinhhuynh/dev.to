@@ -9,6 +9,7 @@ RSpec.describe "all routes", type: :routing do
       controller: "stories",
       action: "index",
       username: podcast.slug,
+      locale: nil, # default locale
     )
   end
 
@@ -17,6 +18,7 @@ RSpec.describe "all routes", type: :routing do
       controller: "stories",
       action: "index",
       username: user.username,
+      locale: nil, # default locale
     )
   end
 
@@ -26,15 +28,35 @@ RSpec.describe "all routes", type: :routing do
       action: "show",
       slug: "this-is-a-slug",
       username: "ben",
+      locale: nil, # default locale
     )
   end
 
   context "when redirected routes" do
     include RSpec::Rails::RequestExampleGroup
 
-    it "redirects /shop to shop.dev.to" do
-      get "/shop"
-      expect(response).to redirect_to("https://shop.dev.to/")
+    it "redirects /settings/integrations to /settings/extensions" do
+      get user_settings_path(:integrations)
+
+      expect(response).to redirect_to(user_settings_path(:extensions))
+    end
+
+    it "redirects /settings/misc to /settings" do
+      get user_settings_path(:misc)
+
+      expect(response).to redirect_to(user_settings_path)
+    end
+
+    it "redirects /settings/publishing-from-rss to /settings/extensions" do
+      get user_settings_path("publishing-from-rss")
+
+      expect(response).to redirect_to(user_settings_path(:extensions))
+    end
+
+    it "redirects /settings/ux to /settings/customization" do
+      get user_settings_path(:ux)
+
+      expect(response).to redirect_to(user_settings_path(:customization))
     end
   end
 end

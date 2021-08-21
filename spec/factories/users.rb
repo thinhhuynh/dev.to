@@ -4,33 +4,49 @@ FactoryBot.define do
   sequence(:twitter_username) { |n| "twitter#{n}" }
   sequence(:github_username) { |n| "github#{n}" }
 
-  image = Rack::Test::UploadedFile.new(
-    Rails.root.join("spec", "support", "fixtures", "images", "image1.jpeg"),
-    "image/jpeg",
-  )
+  image_path = Rails.root.join("spec/support/fixtures/images/image1.jpeg")
 
   factory :user do
-    name               { Faker::Name.name }
-    email              { generate :email }
-    username           { generate :username }
-    profile_image      { image }
-    twitter_username   { generate :twitter_username }
-    github_username    { generate :github_username }
-    summary            { Faker::Lorem.paragraph[0..rand(190)] }
-    website_url        { Faker::Internet.url }
-    confirmed_at       { Time.current }
-    saw_onboarding { true }
-    checked_code_of_conduct { true }
+    name                         { Faker::Name.name }
+    email                        { generate :email }
+    username                     { generate :username }
+    profile_image                { Rack::Test::UploadedFile.new(image_path, "image/jpeg") }
+    twitter_username             { generate :twitter_username }
+    github_username              { generate :github_username }
+    confirmed_at                 { Time.current }
+    saw_onboarding               { true }
+    checked_code_of_conduct      { true }
     checked_terms_and_conditions { true }
-    signup_cta_variant { "navbar_basic" }
-    email_digest_periodic { false }
+    registered_at                { Time.current }
+    signup_cta_variant           { "navbar_basic" }
 
-    after(:create) do |user|
-      create(:identity, user_id: user.id)
+    trait :with_identity do
+      transient { identities { Authentication::Providers.available } }
+
+      after(:create) do |user, options|
+        options.identities.each do |provider|
+          auth = OmniAuth.config.mock_auth.fetch(provider.to_sym)
+          create(
+            :identity,
+            user: user, provider: provider, uid: auth.uid, auth_data_dump: auth,
+          )
+        end
+      end
     end
 
-    trait :two_identities do
-      after(:create) { |user| create(:identity, user_id: user.id, provider: "twitter") }
+    trait :with_broken_identity do
+      # Mimics a situation that can occur in production
+      transient { identities { Authentication::Providers.available } }
+
+      after(:create) do |user, options|
+        options.identities.each do |provider|
+          auth = OmniAuth.config.mock_auth.fetch(provider.to_sym)
+          create(
+            :identity,
+            user: user, provider: provider, uid: auth.uid, auth_data_dump: nil,
+          )
+        end
+      end
     end
 
     trait :super_admin do
@@ -41,27 +57,59 @@ FactoryBot.define do
       after(:build) { |user| user.add_role(:admin) }
     end
 
+    trait :single_resource_admin do
+      transient do
+        resource { nil }
+      end
+
+      after(:build) { |user, options| user.add_role(:single_resource_admin, options.resource) }
+    end
+
+    trait :tech_admin do
+      after(:build) { |user| user.add_role(:tech_admin) }
+    end
+
+    trait :restricted_liquid_tag do
+      transient do
+        resource { nil }
+      end
+
+      after(:build) { |user, options| user.add_role(:restricted_liquid_tag, options.resource) }
+    end
+
+    trait :super_plus_single_resource_admin do
+      transient do
+        resource { nil }
+      end
+
+      after(:build) do |user, options|
+        user.add_role(:super_admin)
+        user.add_role(:single_resource_admin, options.resource)
+      end
+    end
+
     trait :trusted do
       after(:build) { |user| user.add_role(:trusted) }
     end
 
-    trait :banned do
-      after(:build) { |user| user.add_role(:banned) }
+    trait :suspended do
+      after(:build) { |user| user.add_role(:suspended) }
     end
 
-    trait :video_permission do
-      after(:build) { |user| user.created_at = 3.weeks.ago }
-    end
-
-    trait :ignore_after_callback do
+    trait :invited do
       after(:build) do |user|
-        user.define_singleton_method(:subscribe_to_mailchimp_newsletter) {}
-        # user.class.skip_callback(:validates, :after_create)
+        user.registered = false
+        user.registered_at = nil
       end
     end
 
-    trait :pro do
-      after(:build) { |user| user.add_role :pro }
+    trait :ignore_mailchimp_subscribe_callback do
+      after(:build) do |user|
+        # rubocop:disable Lint/EmptyBlock
+        user.define_singleton_method(:subscribe_to_mailchimp_newsletter) {}
+        # rubocop:enable Lint/EmptyBlock
+        # user.class.skip_callback(:validates, :after_create)
+      end
     end
 
     trait :org_member do
@@ -89,7 +137,7 @@ FactoryBot.define do
       after(:create) do |user|
         other_user = create(:user)
         article = create(:article, user_id: other_user.id)
-        create(:comment, user_id: user.id, commentable_id: article.id)
+        create(:comment, user_id: user.id, commentable: article)
         user.update(comments_count: 1)
       end
     end
@@ -97,14 +145,26 @@ FactoryBot.define do
     trait :with_article_and_comment do
       after(:create) do |user|
         article = create(:article, user_id: user.id)
-        create(:comment, user_id: user.id, commentable_id: article.id)
+        create(:comment, user_id: user.id, commentable: article)
         user.update(articles_count: 1, comments_count: 1)
       end
     end
 
-    trait :with_pro_membership do
+    trait :tag_moderator do
       after(:create) do |user|
-        create(:pro_membership, user: user)
+        tag = create(:tag)
+        user.add_role(:tag_moderator, tag)
+      end
+    end
+
+    trait :without_profile do
+      _skip_creating_profile { true }
+    end
+
+    trait :with_newsletters do
+      after(:create) do |user|
+        Users::NotificationSetting.find_by(user_id: user.id)
+          .update_columns(email_newsletter: true, email_digest_periodic: true)
       end
     end
   end

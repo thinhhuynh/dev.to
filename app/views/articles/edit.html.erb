@@ -20,14 +20,15 @@
       <div class="article-form-video-image-url">
         <%= form_for(@article) do |f| %>
           Preview Image URL: <%= f.text_field :video_thumbnail_url, placeholder: "New Thumbnail URL" %>
-          <%= f.submit "Submit Change", class: "cta" %>
+          <%= f.submit "Submit Change", class: "crayons-btn" %>
         <% end %>
       </div>
     <% end %>
   </div>
 <% end %>
 
-<%= javascript_include_tag "https://unpkg.com/@webcomponents/webcomponentsjs@2.2.10/webcomponents-loader.js", defer: true %>
-<%= javascript_pack_tag "clipboardCopy", defer: true %>
-<%= javascript_pack_tag "articleForm", defer: true %>
+<%= render "shared/webcomponents_loader_script" %>
 <%= render "articles/v2_form", article: @article, organizations: @organizations, version: @version %>
+
+<%= javascript_packs_with_chunks_tag "clipboardCopy", "articleForm", defer: true %>
+<div id="markdown-lint-js-path" class="hidden" data-markdown-it-js-path="<%= asset_path("markdown-it.min.js") %>" data-markdown-lint-js-path="<%= asset_path("markdownlint-browser.min.js") %>">

@@ -1,62 +1,58 @@
 import { h } from 'preact';
 import PropTypes from 'prop-types';
-// eslint-disable-next-line import/no-unresolved
-import ConfigImage from 'images/three-dots.svg';
+import { ChannelButton } from './components/ChannelButton';
+import { ConfigMenu } from './configMenu';
+import { channelSorter } from './util';
 
-const Channels = ({
+export const Channels = ({
   activeChannelId,
   chatChannels,
+  unopenedChannelIds,
   handleSwitchChannel,
   expanded,
-  filterQuery,
+  filterQuery = '',
   channelsLoaded,
-  incomingVideoCallChannelIds,
+  currentUserId,
+  triggerActiveContent,
 }) => {
-  const channels = chatChannels.map(channel => {
+  const sortedChatChannels = channelSorter(
+    chatChannels,
+    currentUserId,
+    filterQuery,
+  );
+  const discoverableChannels = sortedChatChannels.discoverableChannels.map(
+    (channel) => {
+      return (
+        <ChannelButton
+          channel={channel}
+          key={channel.chat_channel_id}
+          discoverableChannel
+          triggerActiveContent={triggerActiveContent}
+          isActiveChannel={
+            parseInt(activeChannelId, 10) === channel.chat_channel_id
+          }
+        />
+      );
+    },
+  );
+  const channels = sortedChatChannels.activeChannels.map((channel) => {
     const isActive = parseInt(activeChannelId, 10) === channel.chat_channel_id;
-    const lastOpened = channel.last_opened_at;
     const isUnopened =
-      new Date(channel.channel_last_message_at) > new Date(lastOpened) &&
-      channel.channel_messages_count > 0;
-    let newMessagesIndicator = isUnopened ? 'new' : 'old';
-    if (incomingVideoCallChannelIds.indexOf(channel.chat_channel_id) > -1) {
-      newMessagesIndicator = 'video';
-    }
+      !isActive && unopenedChannelIds.includes(channel.chat_channel_id);
+    const newMessagesIndicator = isUnopened ? 'new' : 'old';
     const otherClassname = isActive
       ? 'chatchanneltab--active'
       : 'chatchanneltab--inactive';
+
     return (
-      <button
-        type="button"
-        key={channel.id}
-        className="chatchanneltabbutton"
-        onClick={handleSwitchChannel}
-        data-channel-id={channel.chat_channel_id}
-        data-channel-slug={channel.channel_modified_slug}
-      >
-        <span
-          className={`chatchanneltab ${otherClassname} chatchanneltab--${newMessagesIndicator}`}
-          data-channel-id={channel.chat_channel_id}
-          data-channel-slug={channel.channel_modified_slug}
-          style={{
-            border: `1px solid ${channel.channel_color}`,
-            boxShadow: `3px 3px 0px ${channel.channel_color}`,
-          }}
-        >
-          <span
-            data-channel-slug={channel.channel_modified_slug}
-            className={`chatchanneltabindicator chatchanneltabindicator--${newMessagesIndicator}`}
-            data-channel-id={channel.chat_channel_id}
-          >
-            <img
-              src={channel.channel_image}
-              alt="pic"
-              className="chatchanneltabindicatordirectimage"
-            />
-          </span>
-          {channel.channel_name}
-        </span>
-      </button>
+      <ChannelButton
+        channel={channel}
+        key={channel.chat_channel_id}
+        newMessagesIndicator={newMessagesIndicator}
+        otherClassname={otherClassname}
+        handleSwitchChannel={handleSwitchChannel}
+        isUnopened={isUnopened}
+      />
     );
   });
   let topNotice = '';
@@ -67,33 +63,20 @@ const Channels = ({
     (channels.length === 0 || channels[0].messages_count === 0)
   ) {
     topNotice = (
-      <div className="chatchannels__channelslistheader">
+      <div className="chatchannels__channelslistheader" role="alert">
         <span role="img" aria-label="emoji">
           👋
-        </span>
-        {' '}
+        </span>{' '}
         Welcome to
-        <b> DEV Connect</b>
-! You may message anyone you mutually follow.
+        <b> Connect</b>! You may message anyone you mutually follow.
       </div>
     );
   }
+
   let channelsListFooter = '';
   if (channels.length === 30) {
     channelsListFooter = (
       <div className="chatchannels__channelslistfooter">...</div>
-    );
-  }
-  let configFooter = '';
-  if (expanded) {
-    configFooter = (
-      <div className="chatchannels__config">
-        <img alt="" src={ConfigImage} style={{ height: '18px' }} />
-        <div className="chatchannels__configmenu">
-          <a href="/settings">DEV Settings</a>
-          <a href="/report-abuse">Report Abuse</a>
-        </div>
-      </div>
     );
   }
   return (
@@ -101,12 +84,24 @@ const Channels = ({
       <div
         className="chatchannels__channelslist"
         id="chatchannels__channelslist"
+        data-testid="chat-channels-list"
       >
         {topNotice}
         {channels}
+        {discoverableChannels.length > 0 && filterQuery.length > 0 ? (
+          <div>
+            <span className="crayons-indicator crayons-indicator--">
+              Global Channel Search
+            </span>
+            {discoverableChannels}
+          </div>
+        ) : (
+          ''
+        )}
         {channelsListFooter}
       </div>
-      {configFooter}
+
+      <ConfigMenu />
     </div>
   );
 };
@@ -114,11 +109,11 @@ const Channels = ({
 Channels.propTypes = {
   activeChannelId: PropTypes.number.isRequired,
   chatChannels: PropTypes.arrayOf(PropTypes.objectOf()).isRequired,
+  unopenedChannelIds: PropTypes.arrayOf().isRequired,
   handleSwitchChannel: PropTypes.func.isRequired,
+  triggerActiveContent: PropTypes.func.isRequired,
   expanded: PropTypes.bool.isRequired,
   filterQuery: PropTypes.string.isRequired,
   channelsLoaded: PropTypes.bool.isRequired,
-  incomingVideoCallChannelIds: PropTypes.arrayOf(PropTypes.string).isRequired,
+  currentUserId: PropTypes.string.isRequired,
 };
-
-export default Channels;

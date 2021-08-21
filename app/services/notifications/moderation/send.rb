@@ -7,8 +7,8 @@ module Notifications
         @notifiable = notifiable
       end
 
-      def self.call(*args)
-        new(*args).call
+      def self.call(...)
+        new(...).call
       end
 
       delegate :user_data, :comment_data, to: Notifications
@@ -17,7 +17,10 @@ module Notifications
         # notifiable is currently only comment
         return unless notifiable_supported?(notifiable)
 
-        json_data = { user: user_data(User.dev_account) }
+        # do not create the notification if the comment was created by the moderator
+        return if moderator == notifiable.user
+
+        json_data = { user: user_data(User.staff_account) }
         json_data[notifiable.class.name.downcase] = public_send "#{notifiable.class.name.downcase}_data", notifiable
         new_notification = Notification.create!(
           user_id: moderator.id,
@@ -35,7 +38,7 @@ module Notifications
       attr_reader :notifiable, :moderator
 
       def notifiable_supported?(notifiable)
-        SUPPORTED.include? notifiable.class
+        SUPPORTED.include?(notifiable.class)
       end
     end
   end

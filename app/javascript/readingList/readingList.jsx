@@ -1,71 +1,86 @@
-import { h, Component } from 'preact';
-import { PropTypes } from 'preact-compat';
-import debounce from 'lodash.debounce';
+import { h, Component, Fragment } from 'preact';
+import PropTypes from 'prop-types';
 
 import {
-  defaultState,
   loadNextPage,
   onSearchBoxType,
   performInitialSearch,
   search,
-  toggleTag,
+  selectTag,
   clearSelectedTags,
 } from '../searchableItemList/searchableItemList';
-import { ItemListItem } from '../src/components/ItemList/ItemListItem';
-import { ItemListItemArchiveButton } from '../src/components/ItemList/ItemListItemArchiveButton';
-import { ItemListLoadMoreButton } from '../src/components/ItemList/ItemListLoadMoreButton';
-import { ItemListTags } from '../src/components/ItemList/ItemListTags';
+import { ItemListItem } from './components/ItemListItem';
+import { ItemListItemArchiveButton } from './components/ItemListItemArchiveButton';
+import { TagList } from './components/TagList';
+import { MediaQuery } from '@components/MediaQuery';
+import { BREAKPOINTS } from '@components/useMediaQuery';
+import { debounceAction } from '@utilities/debounceAction';
+import { Button } from '@crayons';
+import { request } from '@utilities/http';
 
-const STATUS_VIEW_VALID = 'valid';
+const NO_RESULTS_WITH_FILTER_MESSAGE = 'Nothing with this filter 🤔';
+const STATUS_VIEW_VALID = 'valid,confirmed';
 const STATUS_VIEW_ARCHIVED = 'archived';
 const READING_LIST_ARCHIVE_PATH = '/readinglist/archive';
 const READING_LIST_PATH = '/readinglist';
 
-const FilterText = ({ selectedTags, query, value }) => {
-  return (
-    <h1>
-      {selectedTags.length === 0 && query.length === 0
-        ? value
-        : 'Nothing with this filter 🤔'}
-    </h1>
-  );
-};
+function ItemList({ items, archiveButtonLabel, toggleArchiveStatus }) {
+  return items.map((item) => {
+    return (
+      <ItemListItem item={item} key={item.id}>
+        <ItemListItemArchiveButton
+          text={archiveButtonLabel}
+          onClick={(e) => toggleArchiveStatus(e, item)}
+        />
+      </ItemListItem>
+    );
+  });
+}
 
 export class ReadingList extends Component {
   constructor(props) {
     super(props);
 
-    const { availableTags, statusView } = this.props;
-    this.state = defaultState({ availableTags, archiving: false, statusView });
+    const { statusView } = this.props;
+
+    this.state = {
+      archiving: false,
+      query: '',
+      index: null,
+      page: 0,
+      hitsPerPage: 80,
+      items: [],
+      itemsLoaded: false,
+      itemsTotal: 0,
+      availableTags: [],
+      selectedTag: '',
+      showLoadMoreButton: false,
+      statusView,
+    };
 
     // bind and initialize all shared functions
-    this.onSearchBoxType = debounce(onSearchBoxType.bind(this), 300, {
+    this.onSearchBoxType = debounceAction(onSearchBoxType.bind(this), {
       leading: true,
     });
     this.loadNextPage = loadNextPage.bind(this);
     this.performInitialSearch = performInitialSearch.bind(this);
     this.search = search.bind(this);
-    this.toggleTag = toggleTag.bind(this);
+    this.selectTag = selectTag.bind(this);
     this.clearSelectedTags = clearSelectedTags.bind(this);
   }
 
   componentDidMount() {
-    const { hitsPerPage, statusView } = this.state;
+    const { statusView } = this.state;
 
     this.performInitialSearch({
-      containerId: 'reading-list',
-      indexName: 'SecuredReactions',
-      searchOptions: {
-        hitsPerPage,
-        filters: `status:${statusView}`,
-      },
+      searchOptions: { status: `${statusView}` },
     });
   }
 
-  toggleStatusView = event => {
+  toggleStatusView = (event) => {
     event.preventDefault();
 
-    const { query, selectedTags } = this.state;
+    const { query, selectedTag } = this.state;
 
     const isStatusViewValid = this.statusViewValid();
     const newStatusView = isStatusViewValid
@@ -76,11 +91,11 @@ export class ReadingList extends Component {
       : READING_LIST_PATH;
 
     // empty items so that changing the view will start from scratch
-    this.setState({ statusView: newStatusView, items: [] });
+    this.setState({ statusView: newStatusView, items: [], selectedTag });
 
     this.search(query, {
       page: 0,
-      tags: selectedTags,
+      tags: selectedTag ? [selectedTag] : [],
       statusView: newStatusView,
     });
 
@@ -91,29 +106,23 @@ export class ReadingList extends Component {
   toggleArchiveStatus = (event, item) => {
     event.preventDefault();
 
-    const { statusView, items, totalCount } = this.state;
-    window.fetch(`/reading_list_items/${item.id}`, {
+    const { statusView, items, itemsTotal } = this.state;
+    request(`/reading_list_items/${item.id}`, {
       method: 'PUT',
-      headers: {
-        'X-CSRF-Token': window.csrfToken,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ current_status: statusView }),
-      credentials: 'same-origin',
+      body: { current_status: statusView },
     });
 
-    const t = this;
     const newItems = items;
     newItems.splice(newItems.indexOf(item), 1);
-    t.setState({
+    this.setState({
       archiving: true,
       items: newItems,
-      totalCount: totalCount - 1,
+      itemsTotal: itemsTotal - 1,
     });
 
     // hide the snackbar in a few moments
     setTimeout(() => {
-      t.setState({ archiving: false });
+      this.setState({ archiving: false });
     }, 1000);
   };
 
@@ -123,67 +132,60 @@ export class ReadingList extends Component {
   }
 
   renderEmptyItems() {
-    const { itemsLoaded, selectedTags, query } = this.state;
+    const { itemsLoaded, selectedTag = '', query } = this.state;
+    const showMessage = selectedTag.length === 0 && query.length === 0;
 
     if (itemsLoaded && this.statusViewValid()) {
       return (
-        <div className="items-empty">
-          <FilterText
-            selectedTags={selectedTags}
-            query={query}
-            value="Your Reading List is Lonely"
-          />
-          <h3>
-            Hit the
-            <span className="highlight">SAVE</span>
-            or
-            <span className="highlight">
-              Bookmark
-              <span role="img" aria-label="Bookmark">
-                🔖
-              </span>
+        <section className="align-center p-9 py-10 color-base-80">
+          <h2 className="fw-bold fs-l">
+            {showMessage
+              ? 'Your reading list is empty'
+              : NO_RESULTS_WITH_FILTER_MESSAGE}
+          </h2>
+          <p class="color-base-60 pt-2">
+            Click the{' '}
+            <span class="fw-bold">
+              bookmark reaction
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                className="crayons-icon mx-1"
+                xmlns="http://www.w3.org/2000/svg"
+                role="img"
+              >
+                <path d="M5 2h14a1 1 0 011 1v19.143a.5.5 0 01-.766.424L12 18.03l-7.234 4.536A.5.5 0 014 22.143V3a1 1 0 011-1zm13 2H6v15.432l6-3.761 6 3.761V4z" />
+              </svg>
             </span>
-            to start your Collection
-          </h3>
-        </div>
+            when viewing a post to add it to your reading list.
+          </p>
+        </section>
       );
     }
 
     return (
-      <div className="items-empty">
-        <FilterText
-          selectedTags={selectedTags}
-          query={query}
-          value="Your Archive List is Lonely"
-        />
-      </div>
+      <h2 className="align-center p-9 py-10 color-base-80 fw-bold fs-l">
+        {showMessage
+          ? 'Your Archive is empty...'
+          : NO_RESULTS_WITH_FILTER_MESSAGE}
+      </h2>
     );
   }
 
   render() {
     const {
-      items,
-      itemsLoaded,
-      totalCount,
+      items = [],
+      itemsTotal,
       availableTags,
-      selectedTags,
+      selectedTag = '',
       showLoadMoreButton,
       archiving,
+      loading = false,
     } = this.state;
 
     const isStatusViewValid = this.statusViewValid();
-
-    const archiveButtonLabel = isStatusViewValid ? 'archive' : 'unarchive';
-    const itemsToRender = items.map(item => {
-      return (
-        <ItemListItem item={item}>
-          <ItemListItemArchiveButton
-            text={archiveButtonLabel}
-            onClick={e => this.toggleArchiveStatus(e, item)}
-          />
-        </ItemListItem>
-      );
-    });
+    const archiveButtonLabel = isStatusViewValid ? 'Archive' : 'Unarchive';
 
     const snackBar = archiving ? (
       <div className="snackbar">
@@ -193,67 +195,91 @@ export class ReadingList extends Component {
       ''
     );
     return (
-      <div className="home item-list">
-        <div className="side-bar">
-          <div className="widget filters">
+      <main id="main-content">
+        <header className="crayons-layout l:grid-cols-2 pb-0">
+          <h1 class="crayons-title">
+            {isStatusViewValid ? 'Reading list' : 'Archive'}
+            {` (${itemsTotal})`}
+          </h1>
+          <fieldset className="grid gap-2 m:flex m:justify-end m:items-center l:mb-0 mb-2 px-2 m:px-0">
+            <legend className="hidden">Filter</legend>
+            <Button
+              onClick={(e) => this.toggleStatusView(e)}
+              className="whitespace-nowrap l:mr-2"
+              variant="outlined"
+              url={READING_LIST_ARCHIVE_PATH}
+              tagName="a"
+              data-no-instant
+            >
+              {isStatusViewValid ? 'View archive' : 'View reading list'}
+            </Button>
             <input
+              aria-label="Filter reading list by text"
               onKeyUp={this.onSearchBoxType}
-              placeHolder="search your list"
+              placeholder="Enter some text to filter on..."
+              className="crayons-textfield"
             />
-            <div className="filters-header">
-              <h4 className="filters-header-text">my tags</h4>
-              {Boolean(selectedTags.length) && (
-                <a
-                  className="filters-header-action"
-                  href={
-                    isStatusViewValid
-                      ? READING_LIST_PATH
-                      : READING_LIST_ARCHIVE_PATH
-                  }
-                  onClick={this.clearSelectedTags}
-                  data-no-instant
-                >
-                  clear all
-                </a>
-              )}
-            </div>
-            <ItemListTags
-              availableTags={availableTags}
-              selectedTags={selectedTags}
-              onClick={this.toggleTag}
+            <MediaQuery
+              query={`(max-width: ${BREAKPOINTS.Medium - 1}px)`}
+              render={(matches) => {
+                return (
+                  matches && (
+                    <TagList
+                      availableTags={availableTags}
+                      selectedTag={selectedTag}
+                      onSelectTag={this.selectTag}
+                      isMobile={true}
+                    />
+                  )
+                );
+              }}
             />
-
-            <div className="status-view-toggle">
-              <a
-                href={READING_LIST_ARCHIVE_PATH}
-                onClick={e => this.toggleStatusView(e)}
-                data-no-instant
-              >
-                {isStatusViewValid ? 'View Archive' : 'View Reading List'}
-              </a>
-            </div>
-          </div>
-        </div>
-
-        <div className="items-container">
-          <div className={`results ${itemsLoaded ? 'results--loaded' : ''}`}>
-            <div className="results-header">
-              {isStatusViewValid ? 'Reading List' : 'Archive'}
-              {` (${totalCount > 0 ? totalCount : 'empty'})`}
-            </div>
-            <div>
-              {items.length > 0 ? itemsToRender : this.renderEmptyItems()}
-            </div>
-          </div>
-
-          <ItemListLoadMoreButton
-            show={showLoadMoreButton}
-            onClick={this.loadNextPage}
-          />
-        </div>
-
+          </fieldset>
+        </header>
+        <MediaQuery
+          query={`(min-width: ${BREAKPOINTS.Medium}px)`}
+          render={(matches) => {
+            return (
+              <div className="crayons-layout crayons-layout--2-cols">
+                {matches && (
+                  <div className="crayons-layout__sidebar-left">
+                    <TagList
+                      availableTags={availableTags}
+                      selectedTag={selectedTag}
+                      onSelectTag={this.selectTag}
+                    />
+                  </div>
+                )}
+                <section className="crayons-layout__content crayons-card mb-4">
+                  {items.length > 0 ? (
+                    <Fragment>
+                      <ItemList
+                        items={items}
+                        archiveButtonLabel={archiveButtonLabel}
+                        toggleArchiveStatus={this.toggleArchiveStatus}
+                      />
+                      {showLoadMoreButton && (
+                        <div className="flex justify-center my-2">
+                          <Button
+                            onClick={this.loadNextPage}
+                            variant="secondary"
+                            className="w-max"
+                          >
+                            Load more
+                          </Button>
+                        </div>
+                      )}
+                    </Fragment>
+                  ) : loading ? null : (
+                    this.renderEmptyItems()
+                  )}
+                </section>
+              </div>
+            );
+          }}
+        />
         {snackBar}
-      </div>
+      </main>
     );
   }
 }
@@ -265,10 +291,4 @@ ReadingList.defaultProps = {
 ReadingList.propTypes = {
   availableTags: PropTypes.arrayOf(PropTypes.string).isRequired,
   statusView: PropTypes.oneOf([STATUS_VIEW_VALID, STATUS_VIEW_ARCHIVED]),
-};
-
-FilterText.propTypes = {
-  selectedTags: PropTypes.arrayOf(PropTypes.string).isRequired,
-  value: PropTypes.string.isRequired,
-  query: PropTypes.arrayOf(PropTypes.string).isRequired,
 };

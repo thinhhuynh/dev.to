@@ -14,7 +14,7 @@ module ReverseMarkdown
 
       def treat(node, state)
         case node.name
-        when "code"
+        when "code", "text"
           node.text
         when "br"
           "\n"
@@ -25,11 +25,17 @@ module ReverseMarkdown
 
       def language(node)
         lang = language_from_highlight_class(node)
-        lang || language_from_confluence_class(node)
+        lang ||= language_from_language_class(node)
+        lang ||= language_from_confluence_class(node)
+        lang
       end
 
       def language_from_highlight_class(node)
         node.parent["class"].to_s[/highlight-([a-zA-Z0-9]+)/, 1]
+      end
+
+      def language_from_language_class(node)
+        node["class"].to_s[/language-([a-zA-Z0-9]+)/, 1]
       end
 
       def language_from_confluence_class(node)

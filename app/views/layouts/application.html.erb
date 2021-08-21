@@ -3,103 +3,123 @@
   <head>
     <meta charset="utf-8">
     <% title = yield(:title) %>
-    <title><%= title || "#{ApplicationConfig['COMMUNITY_NAME']} Community" %></title>
-    <% if internal_navigation? %>
-      <style>
-        .universal-page-content-wrapper {
-          visibility: hidden;
-        }
-      </style>
-    <% else %>
+    <title><%= title || community_name.to_s %></title>
+    <% unless internal_navigation? %>
       <meta name="last-updated" content="<%= Time.current %>">
       <meta name="user-signed-in" content="<%= user_signed_in? %>">
-      <meta name="algolia-public-id" content="<%= ApplicationConfig["ALGOLIASEARCH_APPLICATION_ID"] %>">
-      <meta name="algolia-public-key" content="<%= ALGOLIASEARCH_PUBLIC_SEARCH_ONLY_KEY %>">
+      <meta name="head-cached-at" content="<%= Time.current.to_i %>">
+      <% if Settings::General.payment_pointer.present? %>
+        <!-- Experimental web monetization payment pointer for micropayments -->
+        <!-- It lets readers make micropayments to websites they visit. -->
+        <!-- This is step 1: Get live in production to test for platform-wide payment pointer. -->
+        <!-- Step 2: Allow authors to set their payment pointer so they can directly monetize their content based on visitors. -->
+        <!-- Step 3: Enable further functionality based on what we learn from this experimentation and how the ecosystem evolves. -->
+        <meta name="monetization" content="<%= Settings::General.payment_pointer %>">
+      <% end %>
       <meta name="environment" content="<%= Rails.env %>">
-      <%= render "layouts/styles" %>
-      <style>
-        .home {
-          overflow: hidden;
-          position: relative;
-          text-align: center;
-          min-height: 440px;
-          margin: auto;
-          max-width: 1250px;
-        }
-
-        @media screen and (min-width: 950px) {
-          .home {
-            margin-top: 26px;
-          }
-        }
-      </style>
-      <%= javascript_pack_tag "manifest", defer: true %>
-      <%= javascript_pack_tag "vendor", defer: true %>
-      <%= javascript_pack_tag "Search", defer: true %>
-      <% if core_pages? %>
-        <%= javascript_include_tag "base", defer: true %>
-        <% if user_signed_in? %>
-          <%= javascript_pack_tag "onboardingRedirectCheck", defer: true %>
-          <%= javascript_pack_tag "contentDisplayPolicy", defer: true %>
-        <% end %>
+      <%= render "layouts/styles", qualifier: "main" %>
+      <% unless user_signed_in? %>
+        <%= javascript_packs_with_chunks_tag "base", "Search", "runtimeBanner", defer: true %>
       <% end %>
-      <% if !core_pages? %>
-        <%= stylesheet_link_tag "application", media: "all" %>
-        <% if render_js? %>
-          <link href='https://fonts.googleapis.com/css?family=Roboto' rel='stylesheet' type='text/css'>
-          <%= javascript_include_tag "application" %>
-        <% end %>
-      <% end %>
-      <% if view_class == "users users-signout_confirm" %>
-        <%= javascript_include_tag "application" %>
+      <%= javascript_include_tag "base", defer: true %>
+      <% if user_signed_in? %>
+        <%= javascript_packs_with_chunks_tag "base", "Search", "runtimeBanner", "onboardingRedirectCheck", "contentDisplayPolicy", defer: true %>
       <% end %>
       <%= yield(:page_meta) %>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-      <%= favicon_link_tag ApplicationConfig["FAVICON_URL"] %>
-      <link rel="apple-touch-icon" href="<%= asset_path "apple-icon.png" %>">
-      <link rel="apple-touch-icon" sizes="152x152" href="<%= asset_path "apple-icon-152x152.png" %>">
-      <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path "apple-icon-180x180.png" %>">
-      <link rel="apple-touch-icon" sizes="167x167" href="<%= asset_path "apple-icon-167x167.png" %>">
-      <link href="<%= asset_path "android-icon-192x192.png" %>" rel="icon" sizes="192x192" />
-      <link href="<%= asset_path "android-icon-128x128.png" %>" rel="icon" sizes="128x128" />
-      <meta name="apple-mobile-web-app-title" content="dev.to">
-      <meta name="application-name" content="dev.to">
-      <meta property="fb:pages" content="568966383279687" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+      <%= favicon_link_tag Images::Optimizer.call(Settings::General.favicon_url, width: 32) %>
+      <link rel="apple-touch-icon" href="<%= optimized_image_url(Settings::General.logo_png, width: 180, fetch_format: "png") %>">
+      <link rel="apple-touch-icon" sizes="152x152" href="<%= optimized_image_url(Settings::General.logo_png, width: 152, fetch_format: "png") %>">
+      <link rel="apple-touch-icon" sizes="180x180" href="<%= optimized_image_url(Settings::General.logo_png, width: 180, fetch_format: "png") %>">
+      <link rel="apple-touch-icon" sizes="167x167" href="<%= optimized_image_url(Settings::General.logo_png, width: 167, fetch_format: "png") %>">
+      <link href="<%= optimized_image_url(Settings::General.logo_png, width: 192, fetch_format: "png") %>" rel="icon" sizes="192x192" />
+      <link href="<%= optimized_image_url(Settings::General.logo_png, width: 128, fetch_format: "png") %>" rel="icon" sizes="128x128" />
+      <meta name="apple-mobile-web-app-title" content="<%= Settings::General.app_domain %>">
+      <meta name="application-name" content="<%= Settings::General.app_domain %>">
       <meta name="theme-color" content="#000000" />
-      <% if view_class.include? "users-signout_confirm" %>
-        <%= csrf_meta_tags %>
-      <% end %>
-      <link rel="manifest" href="/manifest.json" />
-      <link rel="search" href="https://dev.to/search.xml" type="application/opensearchdescription+xml" title="<%= community_qualified_name %>" />
+      <link rel="search" href="<%= URL.url("open-search.xml") %>" type="application/opensearchdescription+xml" title="<%= community_name %>" />
+
+      <meta property="forem:name" content="<%= community_name %>" />
+      <meta property="forem:logo" content="<%= optimized_image_url(Settings::General.logo_png, width: 512, fetch_format: "png") %>" />
+      <meta property="forem:domain" content="<%= Settings::General.app_domain %>" />
     <% end %>
   </head>
-  <body data-user-status="<%= user_logged_in_status %>" data-pusher-key="<%= ApplicationConfig["PUSHER_KEY"] %>">
-    <div id="body-styles"></div>
-    <% if user_signed_in? && !internal_navigation? %>
-      <%= render "layouts/user_config" %>
+  <% unless internal_navigation? %>
+    <% cache(release_adjusted_cache_key("top-html-and-config--#{user_signed_in?}")) do %>
+      <body
+        data-user-status="<%= user_logged_in_status %>"
+        class="<%= Settings::UserExperience.default_font.tr("_", "-") %>-article-body default-header"
+        data-pusher-key="<%= ApplicationConfig["PUSHER_KEY"] %>"
+        data-app-domain="<%= ChatChannel.urlsafe_encoded_app_domain %>"
+        data-honeybadger-key="<%= ApplicationConfig["HONEYBADGER_JS_API_KEY"] %>"
+        data-deployed-at="<%= ForemInstance.deployed_at %>"
+        data-latest-commit-id="<%= ForemInstance.latest_commit_id %>"
+        data-ga-tracking="<%= Settings::General.ga_tracking_id %>">
+        <%# Repeat of stylesheets in <head> to fix rendering glitch: https://github.com/forem/forem/issues/12377 %>
+        <%= render "layouts/styles", qualifier: "secondary" %>
+        <div id="body-styles">
+          <style>
+            :root {
+              --accent-brand: <%= Settings::UserExperience.primary_brand_color_hex %>;
+              --accent-brand-darker: <%= Color::CompareHex.new([Settings::UserExperience.primary_brand_color_hex]).brightness(0.85) %>;
+              --accent-brand-lighter: <%= Color::CompareHex.new([Settings::UserExperience.primary_brand_color_hex]).brightness(1.1) %>;
+              --accent-brand-a10: <%= Color::CompareHex.new([Settings::UserExperience.primary_brand_color_hex]).opacity(0.1) %>;
+            }
+          </style>
+        </div>
+        <% if user_signed_in? %>
+          <%= render "layouts/user_config" %>
+        <% end %>
+        <div id="audiocontent" data-podcast="">
+          <%= yield(:audio) %>
+        </div>
+        <%= render "layouts/top_bar" %>
+        <div id="active-broadcast" class="broadcast-wrapper"></div>
+        <div id="message-notice"></div>
+        <div class="app-shell-loader">
+          loading...
+        </div>
     <% end %>
-    <% unless internal_navigation? %>
-      <div id="audiocontent">
-        <%= yield(:audio) %>
-      </div>
-    <% end %>
-    <% cache("application-top-bar--#{user_signed_in?}--#{internal_navigation?}", expires_in: 100.hours) do %>
-      <%= render "layouts/top_bar" unless internal_navigation? %>
-    <% end %>
-    <div id="message-notice"></div>
-    <div id="page-content" class="universal-page-content-wrapper <%= view_class %>" data-current-page="<%= current_page %>">
-      <div id="page-content-inner">
-        <%= yield %>
-      </div>
+  <% end %>
+<% if Settings::General.payment_pointer.present? %>
+  <div id="base-payment-pointer" data-payment-pointer="<%= Settings::General.payment_pointer %>"></div>
+<% end %>
+<style>.app-shell-loader {display: none;}</style>
+<div id="page-content" class="wrapper <%= view_class %>" data-current-page="<%= current_page %>">
+  <% if flash[:global_notice] %>
+    <div class="crayons-banner" aria-live="polite">
+      <%= flash[:global_notice] %>
     </div>
-    <% unless internal_navigation? %>
-      <% cache("footer-and-signup-modal--#{user_signed_in?}--#{ApplicationConfig['DEPLOYMENT_SIGNATURE']}", expires_in: 200.hours) do %>
-        <%= render "layouts/footer" %>
-        <%= render "layouts/signup_modal" unless user_signed_in? %>
-      <% end %>
-      <div id="live-article-indicator" class="live-article-indicator"></div>
-      <%= image_tag("twitter-logo.svg", class: "icon-img", style: "display:none", alt: "twitter logo") %>
-      <%= image_tag("github-logo.svg", class: "icon-img", style: "display:none", alt: "github logo") %>
+  <% end %>
+  <div id="page-content-inner">
+    <div id="page-route-change" class="screen-reader-only" aria-live="polite" aria-atomic="true"></div>
+    <% if @hero_html %>
+      <div id="hero-html-wrapper" class="overflow-x-hidden" data-name="<%= @hero_area.name %>">
+        <script>
+          // Make sure html variant element has id hero-html-wrapper and data-name as its name
+          if (localStorage.getItem('exited_hero') === '<%= @hero_area.name.html_safe %>') {
+            document.getElementById('hero-html-wrapper').style.display = 'none';
+          }
+        </script>
+        <%= @hero_html.html_safe %>
+      </div>
     <% end %>
+    <%= yield %>
+    <div id="runtime-banner-container"></div>
+  </div>
+</div>
+<% unless internal_navigation? %>
+  <% cache("footer-and-signup-modal-#{user_signed_in?}-#{ForemInstance.deployed_at}-#{Settings::General.admin_action_taken_at&.rfc3339}", expires_in: 24.hours) do %>
+    <%= render "layouts/footer" %>
+    <%= render "layouts/signup_modal" unless user_signed_in? %>
+  <% end %>
+  <% if @shell %>
+    <script>
+      if (!document.title) {
+        document.title = document.getElementsByTagName("TITLE")[1].textContent
+      }
+    </script>
+  <% end %>
   </body>
-</html>
+  </html>
+<% end %>

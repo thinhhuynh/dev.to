@@ -1,8 +1,9 @@
 import { h, render } from 'preact';
 import { getUserDataAndCsrfToken } from '../chat/util';
-import ArticleForm from '../article-form/articleForm';
+import { ArticleForm } from '../article-form/articleForm';
+import { Snackbar } from '../Snackbar';
 
-HTMLDocument.prototype.ready = new Promise(resolve => {
+HTMLDocument.prototype.ready = new Promise((resolve) => {
   if (document.readyState !== 'loading') {
     return resolve();
   }
@@ -11,18 +12,26 @@ HTMLDocument.prototype.ready = new Promise(resolve => {
 });
 
 function loadForm() {
+  // The Snackbar for the article page
+  const snackZone = document.getElementById('snack-zone');
+
+  if (snackZone) {
+    render(<Snackbar lifespan="3" />, snackZone);
+  }
+
   getUserDataAndCsrfToken().then(({ currentUser, csrfToken }) => {
     window.currentUser = currentUser;
     window.csrfToken = csrfToken;
 
-    const root = document.getElementById('article-form');
-    const { article, organizations, version } = root.dataset;
+    const root = document.querySelector('main');
+    const { article, organizations, version, siteLogo } = root.dataset;
 
     render(
       <ArticleForm
         article={article}
         organizations={organizations}
         version={version}
+        siteLogo={siteLogo}
       />,
       root,
       root.firstElementChild,
@@ -38,5 +47,3 @@ document.ready.then(() => {
     }
   });
 });
-
-

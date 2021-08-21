@@ -5,10 +5,10 @@ class PodcastEpisodesController < ApplicationController
   def index
     @podcast_index = true
 
-    @podcasts = Podcast.available.order("title asc")
-    @podcast_episodes = PodcastEpisodeDecorator.decorate_collection(PodcastEpisode.
-      available.
-      includes(:podcast).order("published_at desc").first(20))
+    @podcasts = Podcast.available.order(title: :asc)
+    @podcast_episodes = PodcastEpisodeDecorator.decorate_collection(PodcastEpisode
+      .available
+      .includes(:podcast).order(published_at: :desc).first(20))
 
     if params[:q].blank?
       surrogate_keys = ["podcast_episodes_all"] + @podcast_episodes.map(&:record_key)
@@ -20,16 +20,5 @@ class PodcastEpisodesController < ApplicationController
     @list_of = "podcast-episodes"
 
     render template: "podcast_episodes/index"
-  end
-
-  private
-
-  def podcast_episode_params
-    params.require(:podcast_episode).permit(:title,
-                                            :body,
-                                            :image,
-                                            :social_image,
-                                            :remote_social_image_url,
-                                            :quote)
   end
 end

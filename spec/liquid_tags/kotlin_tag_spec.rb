@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe KotlinTag, type: :liquid_template do
+RSpec.describe KotlinTag, type: :liquid_tag do
   describe "#link" do
     let(:valid_link) { "https://pl.kotl.in/owreUFFUG?theme=darcula&from=3&to=6&readOnly=true" }
 
@@ -22,14 +22,26 @@ RSpec.describe KotlinTag, type: :liquid_template do
     end
 
     def check(url, expected)
-      expect(KotlinTag.parse_link(url)).to eq(expected)
+      expect(described_class.parse_link(url)).to eq(expected)
     end
 
     it "parses URL correctly" do
       check("https://pl.kotl.in/owreUFFUG", from: nil, readOnly: nil, short: "owreUFFUG", theme: nil, to: nil)
-      check("https://pl.kotl.in/owreUFFUG?theme=dracula&from=3&to=6&readOnly=true", from: "3", readOnly: "true", short: "owreUFFUG", theme: "dracula", to: "6")
-      check("https://pl.kotl.in/owreUFFUG?theme=dracula&readOnly=true", from: nil, readOnly: "true", short: "owreUFFUG", theme: "dracula", to: nil)
-      check("https://pl.kotl.in/owreUFFUG?from=3&to=6", from: "3", readOnly: nil, short: "owreUFFUG", theme: nil, to: "6")
+
+      check(
+        "https://pl.kotl.in/owreUFFUG?theme=dracula&from=3&to=6&readOnly=true",
+        from: "3", readOnly: "true", short: "owreUFFUG", theme: "dracula", to: "6",
+      )
+
+      check(
+        "https://pl.kotl.in/owreUFFUG?theme=dracula&readOnly=true",
+        from: nil, readOnly: "true", short: "owreUFFUG", theme: "dracula", to: nil,
+      )
+
+      check(
+        "https://pl.kotl.in/owreUFFUG?from=3&to=6",
+        from: "3", readOnly: nil, short: "owreUFFUG", theme: nil, to: "6",
+      )
     end
 
     it "produces a correct final URL" do
@@ -39,8 +51,13 @@ RSpec.describe KotlinTag, type: :liquid_template do
 
     it "renders correctly a Kotlin Playground link" do
       liquid = generate_new_liquid(valid_link)
-      rendered_kotlin_iframe = liquid.render
-      Approvals.verify(rendered_kotlin_iframe, name: "kotlin_liquid_tag", format: :html)
+
+      # rubocop:disable Style/StringLiterals
+      expect(liquid.render).to include('<iframe')
+        .and include(
+          "https://play.kotlinlang.org/embed?short=owreUFFUG&amp;from&amp;to&amp;theme=darcula&amp;readOnly",
+        )
+      # rubocop:enable Style/StringLiterals
     end
   end
 end
